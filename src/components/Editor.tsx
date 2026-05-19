@@ -14,7 +14,8 @@ import {
   Node,
   Panel,
   ReactFlowProvider,
-  useReactFlow
+  useReactFlow,
+  FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
@@ -186,7 +187,7 @@ function FlowEditor() {
   );
 
   const onConnectEnd = useCallback(
-    (event: MouseEvent | TouchEvent, connectionState: { isValid: boolean | null; fromNode: Node | null; fromHandle: { id?: string | null } | null }) => {
+    (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       if (!connectionState.isValid && connectionState.fromNode) {
         let clientX = 0, clientY = 0;
         if (event instanceof MouseEvent) {
@@ -198,6 +199,7 @@ function FlowEditor() {
         }
 
         // 1. Check if the connection was dropped on ANY part of a node
+        // (sometimes the end coordinates are a few pixels off the mouse in react flow's pane, so elementFromPoint helps)
         const target = document.elementFromPoint(clientX, clientY);
         // Climb the tree to see if we hit a node
         const nodeElement = target?.closest('.react-flow__node');
