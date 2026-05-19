@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 body {
@@ -36,4 +36,25 @@ body {
   from {
     stroke-dashoffset: 10;
   }
+}
+
+/* React Flow Controls Override */
+.react-flow__controls-button {
+  background-color: #ffffff !important;
+  fill: #1f2937 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.react-flow__controls-button:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.dark .react-flow__controls-button {
+  background-color: #1f2937 !important;
+  fill: #f3f4f6 !important;
+  border-bottom: 1px solid #374151 !important;
+}
+
+.dark .react-flow__controls-button:hover {
+  background-color: #374151 !important;
 }
