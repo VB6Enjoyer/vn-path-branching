@@ -19,7 +19,16 @@ A visually appealing "brain map" style decision chart editor, designed primarily
 - **Auto-Layout Algorithm:** `dagre`
 - **Styling:** Tailwind CSS
 
-## Getting Started
+## Deployment instructions for Render
+
+1. Go to your Render Dashboard
+2. Select your `vn-path-branching` Web Service
+3. Go to **Settings**
+4. Change **Build Command** to: `npm install && npm run build`
+5. Change **Start Command** to: `npm run start`
+6. Click **Save Changes** and manually trigger a new deploy.
+
+## Getting Started Locally
 
 1. Run \`npm install\` to install dependencies.
 2. Run \`npm run dev\` to start the Next.js development server.
