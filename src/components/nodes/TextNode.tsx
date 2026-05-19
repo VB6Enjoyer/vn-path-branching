@@ -22,7 +22,7 @@ export function TextNode({ data, id }: NodeProps) {
 
   return (
     <div className="bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-400 dark:border-yellow-600 rounded-lg shadow-lg w-48 group">
-      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-yellow-500" />
+      <Handle type="target" position={Position.Top} className="w-5 h-5 bg-yellow-500" />
 
       <div className="bg-yellow-400 dark:bg-yellow-600 text-yellow-900 dark:text-yellow-50 p-1.5 rounded-t-sm font-bold text-xs flex justify-between items-center">
         <span>Note / Event</span>
@@ -45,7 +45,7 @@ export function TextNode({ data, id }: NodeProps) {
         />
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-yellow-500" />
+      <Handle type="source" position={Position.Bottom} className="w-5 h-5 bg-yellow-500" />
     </div>
   );
 }

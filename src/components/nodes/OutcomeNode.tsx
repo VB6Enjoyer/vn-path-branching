@@ -42,7 +42,7 @@ export function OutcomeNode({ data, id }: NodeProps) {
 
   return (
     <div className={`border-2 rounded-lg shadow-lg w-48 group ${colors[type as keyof typeof colors]}`}>
-      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-gray-800 dark:bg-gray-400" />
+      <Handle type="target" position={Position.Top} className="w-5 h-5 bg-gray-800 dark:bg-gray-400" />
 
       <div className={`p-1.5 rounded-t-sm font-bold text-xs flex justify-between items-center ${headerColors[type as keyof typeof headerColors]}`}>
         <span>Outcome / Ending</span>

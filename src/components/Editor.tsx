@@ -45,12 +45,11 @@ const initialNodes: Node[] = [
 const initialEdges: Edge[] = [];
 
 function FlowEditor() {
-  const { fitView } = useReactFlow();
+  const { fitView, screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Set initial state without effect to avoid cascading
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('brain-map-theme') === 'dark';
@@ -58,11 +57,13 @@ function FlowEditor() {
     return false;
   });
 
-  // Auto-save logic
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Context Menu State
+  const [menu, setMenu] = useState<{ x: number, y: number, show: boolean, params?: {source: string, sourceHandle?: string} }>({ x: 0, y: 0, show: false });
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    // Also load theme preference
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
     }
@@ -80,7 +81,6 @@ function FlowEditor() {
       }
     }
 
-    // We defer setting isLoaded to the end of the effect
     const timer = setTimeout(() => setIsLoaded(true), 0);
     return () => clearTimeout(timer);
   }, [setNodes, setEdges, isDarkMode]);
@@ -95,6 +95,7 @@ function FlowEditor() {
       delete cleanData.onOutcomeChange;
       delete cleanData.onTypeChange;
       delete cleanData.onDelete;
+      delete cleanData.onTextHiddenChange;
       return { ...n, data: cleanData };
     });
     localStorage.setItem('brain-map-flow', JSON.stringify({ nodes: cleanNodes, edges }));
@@ -111,7 +112,6 @@ function FlowEditor() {
     }
   };
 
-  // Node manipulation helpers
   const updateNodeData = useCallback((nodeId: string, newData: Record<string, unknown>) => {
     setNodes((nds) =>
       nds.map((node) => {
@@ -128,7 +128,6 @@ function FlowEditor() {
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
   }, [setNodes, setEdges]);
 
-  // Inject callbacks into nodes
   const nodesWithCallbacks = useMemo(() => {
     return nodes.map(node => {
       const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode };
@@ -136,7 +135,6 @@ function FlowEditor() {
       if (node.type === 'decision') {
         data.onChoicesChange = (id: string, choices: string[]) => {
           updateNodeData(id, { choices });
-          // Update edge labels when choices change
           setEdges((eds) => eds.map((e) => {
             if (e.source === id) {
               const choiceIndexStr = e.sourceHandle?.replace('choice-', '');
@@ -151,6 +149,7 @@ function FlowEditor() {
           }));
         };
         data.onPromptChange = (id: string, prompt: string) => updateNodeData(id, { prompt });
+        data.onTextHiddenChange = (id: string, isTextHidden: boolean) => updateNodeData(id, { isTextHidden });
       } else if (node.type === 'text') {
         data.onContentChange = (id: string, content: string) => updateNodeData(id, { content });
       } else if (node.type === 'outcome') {
@@ -162,7 +161,6 @@ function FlowEditor() {
     });
   }, [nodes, updateNodeData, deleteNode, setEdges]);
 
-  // Handle connections
   const onConnect = useCallback(
     (params: Connection) => {
       let label = '';
@@ -179,13 +177,38 @@ function FlowEditor() {
 
       setEdges((eds) => addEdge({
         ...params,
-        type: 'custom', // Use custom edge
+        type: 'custom',
         animated: true,
         label,
-        // We handle styling in CustomEdge now, but react-flow might still use these
       }, eds));
     },
     [setEdges, nodes],
+  );
+
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState: { isValid: boolean | null; fromNode: Node | null; fromHandle: { id?: string | null } | null }) => {
+      if (!connectionState.isValid && connectionState.fromNode) {
+        let x = 0, y = 0;
+        if (event instanceof MouseEvent) {
+          x = event.clientX;
+          y = event.clientY;
+        } else if (event instanceof TouchEvent && event.touches.length > 0) {
+          x = event.touches[0].clientX;
+          y = event.touches[0].clientY;
+        }
+
+        setMenu({
+          show: true,
+          x,
+          y,
+          params: {
+            source: connectionState.fromNode.id,
+            sourceHandle: connectionState.fromHandle?.id || undefined,
+          }
+        });
+      }
+    },
+    []
   );
 
   const onLayout = useCallback(
@@ -201,17 +224,49 @@ function FlowEditor() {
     [nodes, edges, setNodes, setEdges]
   );
 
-  const addNode = (type: 'decision' | 'text' | 'outcome') => {
+  const addNode = (type: 'decision' | 'text' | 'outcome', x?: number, y?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
+    let position = { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 100 };
+    if (x !== undefined && y !== undefined) {
+      position = screenToFlowPosition({ x, y });
+    }
+
+    const id = uuidv4();
     const newNode: Node = {
-      id: uuidv4(),
+      id,
       type,
-      position: { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 100 },
+      position,
       data:
         type === 'decision' ? { prompt: 'New Decision', choices: ['Choice A', 'Choice B'] } :
         type === 'text' ? { content: 'New Note' } :
         { outcome: 'New Ending', type: 'neutral' },
     };
+
     setNodes((nds) => nds.concat(newNode));
+
+    if (connectionParams && connectionParams.source) {
+       let label = '';
+       if (connectionParams.sourceHandle?.startsWith('choice-')) {
+         const sourceNode = nodes.find(n => n.id === connectionParams.source);
+         if (sourceNode && Array.isArray(sourceNode.data.choices)) {
+           const index = parseInt(connectionParams.sourceHandle.replace('choice-', ''), 10);
+           if (!isNaN(index)) {
+             label = sourceNode.data.choices[index] || '';
+           }
+         }
+       }
+
+       setEdges((eds) => addEdge({
+         id: `e-${connectionParams.source}-${id}`, // explicit id
+         source: connectionParams.source,
+         sourceHandle: connectionParams.sourceHandle || null,
+         target: id,
+         targetHandle: null,
+         type: 'custom',
+         animated: true,
+         label
+       }, eds));
+    }
+    setMenu({ show: false, x: 0, y: 0 });
   };
 
   const centerOnStart = () => {
@@ -230,6 +285,7 @@ function FlowEditor() {
         delete cleanData.onOutcomeChange;
         delete cleanData.onTypeChange;
         delete cleanData.onDelete;
+        delete cleanData.onTextHiddenChange;
         return { ...n, data: cleanData };
     });
 
@@ -266,13 +322,14 @@ function FlowEditor() {
   };
 
   return (
-    <div className="w-full h-screen relative bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="w-full h-screen relative bg-gray-50 dark:bg-gray-900 transition-colors" ref={reactFlowWrapper} onClick={() => setMenu({ show: false, x: 0, y: 0 })}>
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectEnd={onConnectEnd}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         colorMode={isDarkMode ? 'dark' : 'light'}
@@ -321,6 +378,19 @@ function FlowEditor() {
           </div>
         </Panel>
       </ReactFlow>
+
+      {menu.show && (
+        <div
+          className="absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-md py-2 w-48 z-50 flex flex-col"
+          style={{ top: menu.y, left: menu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Create connection to...</div>
+          <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('decision', menu.x, menu.y, menu.params)}>Decision Node</button>
+          <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('text', menu.x, menu.y, menu.params)}>Note / Event Node</button>
+          <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('outcome', menu.x, menu.y, menu.params)}>Outcome Node</button>
+        </div>
+      )}
     </div>
   );
 }
