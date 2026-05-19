@@ -14,8 +14,7 @@ import {
   Node,
   Panel,
   ReactFlowProvider,
-  useReactFlow,
-  FinalConnectionState,
+  useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
@@ -63,6 +62,10 @@ function FlowEditor() {
   // Context Menu State
   const [menu, setMenu] = useState<{ x: number, y: number, show: boolean, params?: {source: string, sourceHandle?: string} }>({ x: 0, y: 0, show: false });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  // We use this ref to prevent onPaneClick from immediately closing the context menu
+  // after dropping a connection into the empty pane.
+  const isConnectingRef = useRef(false);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -162,6 +165,10 @@ function FlowEditor() {
     });
   }, [nodes, updateNodeData, deleteNode, setEdges]);
 
+  const onConnectStart = useCallback(() => {
+    isConnectingRef.current = true;
+  }, []);
+
   const onConnect = useCallback(
     (params: Connection) => {
       let label = '';
@@ -182,12 +189,15 @@ function FlowEditor() {
         animated: true,
         label,
       }, eds));
+
+      // Connection succeeded, reset
+      isConnectingRef.current = false;
     },
     [setEdges, nodes],
   );
 
   const onConnectEnd = useCallback(
-    (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+    (event: MouseEvent | TouchEvent, connectionState: { isValid: boolean | null; fromNode: Node | null; fromHandle: { id?: string | null } | null }) => {
       if (!connectionState.isValid && connectionState.fromNode) {
         let clientX = 0, clientY = 0;
         if (event instanceof MouseEvent) {
@@ -198,16 +208,12 @@ function FlowEditor() {
           clientY = event.touches[0].clientY;
         }
 
-        // 1. Check if the connection was dropped on ANY part of a node
-        // (sometimes the end coordinates are a few pixels off the mouse in react flow's pane, so elementFromPoint helps)
         const target = document.elementFromPoint(clientX, clientY);
-        // Climb the tree to see if we hit a node
         const nodeElement = target?.closest('.react-flow__node');
 
         if (nodeElement) {
           const targetNodeId = nodeElement.getAttribute('data-id');
           if (targetNodeId && targetNodeId !== connectionState.fromNode.id) {
-            // Found a node, connect directly to it
             const params: Connection = {
               source: connectionState.fromNode.id,
               sourceHandle: connectionState.fromHandle?.id || null,
@@ -219,8 +225,6 @@ function FlowEditor() {
           }
         }
 
-        // 2. If not on a node, show context menu
-        // Need to calculate position relative to wrapper for the menu overlay
         if (reactFlowWrapper.current) {
           const { top, left } = reactFlowWrapper.current.getBoundingClientRect();
           setMenu({
@@ -234,11 +238,18 @@ function FlowEditor() {
           });
         }
       }
+
+      // We wrap the reset in a timeout to let onPaneClick evaluate first
+      setTimeout(() => {
+        isConnectingRef.current = false;
+      }, 50);
     },
     [onConnect]
   );
 
   const onPaneClick = useCallback(() => {
+    // If a connection just ended on the pane, do not close the menu
+    if (isConnectingRef.current) return;
     setMenu({ show: false, x: 0, y: 0 });
   }, []);
 
@@ -258,7 +269,6 @@ function FlowEditor() {
   const addNode = (type: 'decision' | 'text' | 'outcome', menuX?: number, menuY?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
     let position = { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 100 };
     if (menuX !== undefined && menuY !== undefined && reactFlowWrapper.current) {
-       // Convert screen coordinates back from our menu local wrapper coordinates
        const { left, top } = reactFlowWrapper.current.getBoundingClientRect();
        position = screenToFlowPosition({ x: menuX + left, y: menuY + top });
     }
@@ -361,6 +371,7 @@ function FlowEditor() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onConnectStart={onConnectStart}
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
         onPaneClick={onPaneClick}
