@@ -44,12 +44,15 @@ export function CustomEdge({
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             fontSize: 12,
             pointerEvents: 'all',
+            backgroundColor: 'var(--text-bg)',
+            color: 'var(--text-color)',
+            borderColor: 'var(--text-color)'
           }}
-          className="nodrag nopan flex items-center gap-1 bg-white dark:bg-gray-800 border border-slate-300 dark:border-slate-600 px-2 py-1 rounded shadow-sm text-slate-700 dark:text-slate-200"
+          className="nodrag nopan flex items-center gap-1 border px-2 py-1 rounded shadow-sm opacity-90"
         >
           {label && <span className="font-semibold">{label}</span>}
           <button
-            className="text-gray-400 hover:text-red-500 transition-colors ml-1"
+            className="text-red-400 hover:text-red-600 transition-colors ml-1"
             onClick={onEdgeClick}
             title="Delete Connection"
           >
