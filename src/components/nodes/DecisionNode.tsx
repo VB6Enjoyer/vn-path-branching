@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Plus, X, Trash2 } from 'lucide-react';
 
@@ -55,7 +55,7 @@ export function DecisionNode({ data, id }: NodeProps) {
   };
 
   return (
-    <div className="bg-white border-2 border-blue-500 rounded-lg shadow-lg w-64 group">
+    <div className="bg-white dark:bg-gray-800 border-2 border-blue-500 rounded-lg shadow-lg w-64 group">
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-blue-500" />
 
       <div className="bg-blue-500 text-white p-2 rounded-t-sm font-bold text-sm flex justify-between items-center">
@@ -71,7 +71,7 @@ export function DecisionNode({ data, id }: NodeProps) {
 
       <div className="p-3">
         <textarea
-          className="w-full text-sm p-2 border border-gray-200 rounded mb-3 resize-none nodrag"
+          className="w-full text-sm p-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded mb-3 resize-none nodrag text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
           rows={2}
           value={prompt}
           onChange={(e) => updatePrompt(e.target.value)}
@@ -79,17 +79,17 @@ export function DecisionNode({ data, id }: NodeProps) {
         />
 
         <div className="space-y-2 mb-3">
-          <div className="text-xs font-semibold text-gray-500 uppercase">Choices</div>
+          <div className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Choices</div>
           {choices.map((choice, index) => (
             <div key={index} className="flex items-center gap-2">
               <input
-                className="flex-1 text-sm p-1 border border-gray-200 rounded nodrag"
+                className="flex-1 text-sm p-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded nodrag text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
                 value={choice}
                 onChange={(e) => updateChoice(index, e.target.value)}
               />
               <button
                 onClick={() => removeChoice(index)}
-                className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
+                className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 p-1 rounded transition-colors"
               >
                 <X size={14} />
               </button>
@@ -99,7 +99,7 @@ export function DecisionNode({ data, id }: NodeProps) {
 
         <button
           onClick={addChoice}
-          className="w-full py-1 text-sm text-blue-600 border border-blue-200 rounded hover:bg-blue-50 flex items-center justify-center gap-1 transition-colors"
+          className="w-full py-1 text-sm text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 flex items-center justify-center gap-1 transition-colors"
         >
           <Plus size={14} /> Add Choice
         </button>

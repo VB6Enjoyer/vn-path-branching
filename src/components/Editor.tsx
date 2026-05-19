@@ -18,15 +18,19 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun } from 'lucide-react';
 
-import { DecisionNode, TextNode, OutcomeNode } from './nodes';
+import { DecisionNode, TextNode, OutcomeNode, CustomEdge } from './nodes';
 import { getLayoutedElements } from '../utils/layout';
 
 const nodeTypes = {
   decision: DecisionNode,
   text: TextNode,
   outcome: OutcomeNode,
+};
+
+const edgeTypes = {
+  custom: CustomEdge,
 };
 
 const initialNodes: Node[] = [
@@ -46,10 +50,23 @@ function FlowEditor() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Set initial state without effect to avoid cascading
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('brain-map-theme') === 'dark';
+    }
+    return false;
+  });
+
   // Auto-save logic
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
+    // Also load theme preference
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    }
+
     const saved = localStorage.getItem('brain-map-flow');
     if (saved) {
       try {
@@ -62,8 +79,11 @@ function FlowEditor() {
         console.error("Failed to load saved flow", err);
       }
     }
-    setIsLoaded(true);
-  }, [setNodes, setEdges]);
+
+    // We defer setting isLoaded to the end of the effect
+    const timer = setTimeout(() => setIsLoaded(true), 0);
+    return () => clearTimeout(timer);
+  }, [setNodes, setEdges, isDarkMode]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -80,6 +100,16 @@ function FlowEditor() {
     localStorage.setItem('brain-map-flow', JSON.stringify({ nodes: cleanNodes, edges }));
   }, [nodes, edges, isLoaded]);
 
+  const toggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
+    if (!isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('brain-map-theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('brain-map-theme', 'light');
+    }
+  };
 
   // Node manipulation helpers
   const updateNodeData = useCallback((nodeId: string, newData: Record<string, unknown>) => {
@@ -101,7 +131,7 @@ function FlowEditor() {
   // Inject callbacks into nodes
   const nodesWithCallbacks = useMemo(() => {
     return nodes.map(node => {
-      const data: Record<string, any> = { ...node.data, onDelete: deleteNode };
+      const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode };
 
       if (node.type === 'decision') {
         data.onChoicesChange = (id: string, choices: string[]) => {
@@ -137,7 +167,6 @@ function FlowEditor() {
     (params: Connection) => {
       let label = '';
 
-      // If connected from a decision node, label the edge with the choice text
       if (params.sourceHandle?.startsWith('choice-')) {
         const sourceNode = nodes.find(n => n.id === params.source);
         if (sourceNode && Array.isArray(sourceNode.data.choices)) {
@@ -150,12 +179,10 @@ function FlowEditor() {
 
       setEdges((eds) => addEdge({
         ...params,
+        type: 'custom', // Use custom edge
         animated: true,
         label,
-        labelBgPadding: [8, 4],
-        labelBgBorderRadius: 4,
-        labelBgStyle: { fill: '#f8fafc', stroke: '#cbd5e1', strokeWidth: 1 },
-        labelStyle: { fill: '#334155', fontWeight: 600, fontSize: 12 }
+        // We handle styling in CustomEdge now, but react-flow might still use these
       }, eds));
     },
     [setEdges, nodes],
@@ -239,7 +266,7 @@ function FlowEditor() {
   };
 
   return (
-    <div className="w-full h-screen relative bg-gray-50">
+    <div className="w-full h-screen relative bg-gray-50 dark:bg-gray-900 transition-colors">
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edges}
@@ -247,32 +274,47 @@ function FlowEditor() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        colorMode={isDarkMode ? 'dark' : 'light'}
         fitView
-        className="bg-gray-50"
+        className="bg-gray-50 dark:bg-gray-900"
       >
-        <Background gap={12} size={1} />
-        <Controls />
-        <MiniMap />
+        <Background gap={12} size={1} color={isDarkMode ? '#374151' : '#cbd5e1'} />
+        <Controls className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" />
+        <MiniMap
+          nodeColor={isDarkMode ? '#4b5563' : '#e2e8f0'}
+          maskColor={isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)'}
+          style={{ backgroundColor: isDarkMode ? '#1f2937' : '#ffffff' }}
+        />
 
-        <Panel position="top-right" className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex flex-col gap-2 w-48">
-          <h3 className="font-bold text-sm mb-1 text-gray-700">Add Nodes</h3>
-          <button onClick={() => addNode('decision')} className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-sm hover:bg-blue-100 transition text-left">Decision</button>
-          <button onClick={() => addNode('text')} className="px-3 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded text-sm hover:bg-yellow-100 transition text-left">Note / Event</button>
-          <button onClick={() => addNode('outcome')} className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-sm hover:bg-purple-100 transition text-left">Outcome</button>
+        <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 flex flex-col gap-2 w-48 transition-colors">
+          <div className="flex justify-between items-center mb-1">
+            <h3 className="font-bold text-sm text-gray-700 dark:text-gray-200">Add Nodes</h3>
+            <button
+              onClick={toggleTheme}
+              className="p-1 rounded-full text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700 transition"
+              title="Toggle Dark Mode"
+            >
+              {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+          </div>
+          <button onClick={() => addNode('decision')} className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded text-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition text-left">Decision</button>
+          <button onClick={() => addNode('text')} className="px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800 rounded text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition text-left">Note / Event</button>
+          <button onClick={() => addNode('outcome')} className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-sm hover:bg-purple-100 dark:hover:bg-purple-900/50 transition text-left">Outcome</button>
 
-          <hr className="my-1 border-gray-100" />
+          <hr className="my-1 border-gray-100 dark:border-gray-700" />
 
-          <h3 className="font-bold text-sm mb-1 text-gray-700">Actions</h3>
-          <button onClick={() => onLayout('TB')} className="px-3 py-1.5 bg-gray-800 text-white rounded text-sm hover:bg-gray-700 transition">Auto Layout Tree</button>
-          <button onClick={centerOnStart} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-sm hover:bg-indigo-100 transition flex items-center justify-center gap-2">
+          <h3 className="font-bold text-sm mb-1 text-gray-700 dark:text-gray-200">Actions</h3>
+          <button onClick={() => onLayout('TB')} className="px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded text-sm hover:bg-gray-700 dark:hover:bg-gray-600 transition">Auto Layout Tree</button>
+          <button onClick={centerOnStart} className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition flex items-center justify-center gap-2">
             <LocateFixed size={14} /> Locate Start
           </button>
 
           <div className="flex gap-2 mt-1">
-             <button onClick={onExport} title="Export JSON" className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 text-gray-700 border border-gray-200 rounded hover:bg-gray-200 transition">
+             <button onClick={onExport} title="Export JSON" className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
                 <Download size={16} />
              </button>
-             <button onClick={() => fileInputRef.current?.click()} title="Import JSON" className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 text-gray-700 border border-gray-200 rounded hover:bg-gray-200 transition">
+             <button onClick={() => fileInputRef.current?.click()} title="Import JSON" className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
                 <Upload size={16} />
              </button>
              <input type="file" ref={fileInputRef} onChange={onImport} accept=".json" className="hidden" />

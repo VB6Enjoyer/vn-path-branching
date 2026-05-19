@@ -1,14 +1,11 @@
 import dagre from 'dagre';
 import { Node, Edge, Position } from '@xyflow/react';
 
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
-
-
-
-
 export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
   const isHorizontal = direction === 'LR';
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+
   dagreGraph.setGraph({ rankdir: direction, ranksep: 120, nodesep: 80 });
 
   nodes.forEach((node) => {
@@ -18,7 +15,21 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
     dagreGraph.setNode(node.id, { width, height });
   });
 
-  edges.forEach((edge) => {
+  // To prevent crossed lines from the same parent, we need to sort the edges
+  // based on the sourceHandle index before passing them to dagre.
+  // Dagre respects the order in which edges are added.
+  const sortedEdges = [...edges].sort((a, b) => {
+    if (a.source === b.source && a.sourceHandle && b.sourceHandle) {
+       const indexA = parseInt(a.sourceHandle.replace('choice-', ''), 10);
+       const indexB = parseInt(b.sourceHandle.replace('choice-', ''), 10);
+       if (!isNaN(indexA) && !isNaN(indexB)) {
+         return indexA - indexB;
+       }
+    }
+    return 0;
+  });
+
+  sortedEdges.forEach((edge) => {
     dagreGraph.setEdge(edge.source, edge.target);
   });
 
