@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Trash2 } from 'lucide-react';
 
 export function DecisionNode({ data, id }: NodeProps) {
   const [choices, setChoices] = useState<string[]>((data.choices as string[]) || ['Choice 1', 'Choice 2']);
@@ -39,6 +39,14 @@ export function DecisionNode({ data, id }: NodeProps) {
     }
   };
 
+  const handleDelete = (e: React.MouseEvent) => {
+    if (e.shiftKey || window.confirm('Are you sure you want to delete this decision node?')) {
+      if (typeof data.onDelete === 'function') {
+        data.onDelete(id);
+      }
+    }
+  };
+
   // Calculate widths for balanced handles based on number of choices
   const getHandlePosition = (index: number, total: number) => {
     if (total === 1) return '50%';
@@ -47,11 +55,18 @@ export function DecisionNode({ data, id }: NodeProps) {
   };
 
   return (
-    <div className="bg-white border-2 border-blue-500 rounded-lg shadow-lg w-64">
+    <div className="bg-white border-2 border-blue-500 rounded-lg shadow-lg w-64 group">
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-blue-500" />
 
       <div className="bg-blue-500 text-white p-2 rounded-t-sm font-bold text-sm flex justify-between items-center">
         <span>Decision</span>
+        <button
+          onClick={handleDelete}
+          className="text-blue-100 hover:text-white hover:bg-blue-600 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Delete Node (Shift+Click to bypass confirm)"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
 
       <div className="p-3">

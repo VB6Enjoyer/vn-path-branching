@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -14,10 +14,11 @@ import {
   Node,
   Panel,
   ReactFlowProvider,
+  useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload } from 'lucide-react';
+import { Download, Upload, LocateFixed } from 'lucide-react';
 
 import { DecisionNode, TextNode, OutcomeNode } from './nodes';
 import { getLayoutedElements } from '../utils/layout';
@@ -40,11 +41,47 @@ const initialNodes: Node[] = [
 const initialEdges: Edge[] = [];
 
 function FlowEditor() {
+  const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Update node data helpers
+  // Auto-save logic
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('brain-map-flow');
+    if (saved) {
+      try {
+        const flow = JSON.parse(saved);
+        if (flow && flow.nodes && flow.edges) {
+          setNodes(flow.nodes);
+          setEdges(flow.edges);
+        }
+      } catch (err) {
+        console.error("Failed to load saved flow", err);
+      }
+    }
+    setIsLoaded(true);
+  }, [setNodes, setEdges]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    const cleanNodes = nodes.map(n => {
+      const cleanData = { ...n.data };
+      delete cleanData.onChoicesChange;
+      delete cleanData.onPromptChange;
+      delete cleanData.onContentChange;
+      delete cleanData.onOutcomeChange;
+      delete cleanData.onTypeChange;
+      delete cleanData.onDelete;
+      return { ...n, data: cleanData };
+    });
+    localStorage.setItem('brain-map-flow', JSON.stringify({ nodes: cleanNodes, edges }));
+  }, [nodes, edges, isLoaded]);
+
+
+  // Node manipulation helpers
   const updateNodeData = useCallback((nodeId: string, newData: Record<string, unknown>) => {
     setNodes((nds) =>
       nds.map((node) => {
@@ -56,15 +93,33 @@ function FlowEditor() {
     );
   }, [setNodes]);
 
-  // Inject update callbacks into node data
+  const deleteNode = useCallback((nodeId: string) => {
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+  }, [setNodes, setEdges]);
+
+  // Inject callbacks into nodes
   const nodesWithCallbacks = useMemo(() => {
     return nodes.map(node => {
-      // Create a shallow copy of data
-      const data = { ...node.data };
+      const data: Record<string, any> = { ...node.data, onDelete: deleteNode };
 
-      // Inject specific callbacks based on node type
       if (node.type === 'decision') {
-        data.onChoicesChange = (id: string, choices: string[]) => updateNodeData(id, { choices });
+        data.onChoicesChange = (id: string, choices: string[]) => {
+          updateNodeData(id, { choices });
+          // Update edge labels when choices change
+          setEdges((eds) => eds.map((e) => {
+            if (e.source === id) {
+              const choiceIndexStr = e.sourceHandle?.replace('choice-', '');
+              if (choiceIndexStr !== undefined) {
+                const index = parseInt(choiceIndexStr, 10);
+                if (!isNaN(index) && choices[index]) {
+                  return { ...e, label: choices[index] };
+                }
+              }
+            }
+            return e;
+          }));
+        };
         data.onPromptChange = (id: string, prompt: string) => updateNodeData(id, { prompt });
       } else if (node.type === 'text') {
         data.onContentChange = (id: string, content: string) => updateNodeData(id, { content });
@@ -75,11 +130,35 @@ function FlowEditor() {
 
       return { ...node, data };
     });
-  }, [nodes, updateNodeData]);
+  }, [nodes, updateNodeData, deleteNode, setEdges]);
 
+  // Handle connections
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),
-    [setEdges],
+    (params: Connection) => {
+      let label = '';
+
+      // If connected from a decision node, label the edge with the choice text
+      if (params.sourceHandle?.startsWith('choice-')) {
+        const sourceNode = nodes.find(n => n.id === params.source);
+        if (sourceNode && Array.isArray(sourceNode.data.choices)) {
+          const index = parseInt(params.sourceHandle.replace('choice-', ''), 10);
+          if (!isNaN(index)) {
+            label = sourceNode.data.choices[index] || '';
+          }
+        }
+      }
+
+      setEdges((eds) => addEdge({
+        ...params,
+        animated: true,
+        label,
+        labelBgPadding: [8, 4],
+        labelBgBorderRadius: 4,
+        labelBgStyle: { fill: '#f8fafc', stroke: '#cbd5e1', strokeWidth: 1 },
+        labelStyle: { fill: '#334155', fontWeight: 600, fontSize: 12 }
+      }, eds));
+    },
+    [setEdges, nodes],
   );
 
   const onLayout = useCallback(
@@ -99,7 +178,7 @@ function FlowEditor() {
     const newNode: Node = {
       id: uuidv4(),
       type,
-      position: { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 100 }, // Centerish
+      position: { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 100 },
       data:
         type === 'decision' ? { prompt: 'New Decision', choices: ['Choice A', 'Choice B'] } :
         type === 'text' ? { content: 'New Note' } :
@@ -108,8 +187,14 @@ function FlowEditor() {
     setNodes((nds) => nds.concat(newNode));
   };
 
+  const centerOnStart = () => {
+    const startNode = nodes.find(n => n.id === 'start') || nodes[0];
+    if (startNode) {
+      fitView({ nodes: [{ id: startNode.id }], duration: 800, padding: 3 });
+    }
+  };
+
   const onExport = () => {
-    // We export nodes without the injected callbacks
     const cleanNodes = nodes.map(n => {
         const cleanData = { ...n.data };
         delete cleanData.onChoicesChange;
@@ -117,6 +202,7 @@ function FlowEditor() {
         delete cleanData.onContentChange;
         delete cleanData.onOutcomeChange;
         delete cleanData.onTypeChange;
+        delete cleanData.onDelete;
         return { ...n, data: cleanData };
     });
 
@@ -149,7 +235,6 @@ function FlowEditor() {
       }
     };
     reader.readAsText(file);
-    // Reset input
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -179,6 +264,9 @@ function FlowEditor() {
 
           <h3 className="font-bold text-sm mb-1 text-gray-700">Actions</h3>
           <button onClick={() => onLayout('TB')} className="px-3 py-1.5 bg-gray-800 text-white rounded text-sm hover:bg-gray-700 transition">Auto Layout Tree</button>
+          <button onClick={centerOnStart} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-sm hover:bg-indigo-100 transition flex items-center justify-center gap-2">
+            <LocateFixed size={14} /> Locate Start
+          </button>
 
           <div className="flex gap-2 mt-1">
              <button onClick={onExport} title="Export JSON" className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 text-gray-700 border border-gray-200 rounded hover:bg-gray-200 transition">
