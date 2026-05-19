@@ -40,7 +40,7 @@ export function OutcomeNode({ data, id }: NodeProps) {
 
   return (
     <div className="border-2 rounded-lg shadow-lg w-48 group" style={{ borderColor: color, backgroundColor: 'var(--text-bg)' }}>
-      <Handle type="target" position={Position.Top} className="w-5 h-5" style={{ backgroundColor: color, border: 'none' }} />
+      <Handle type="target" position={Position.Top} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100" style={{ backgroundColor: color }} />
 
       <div className="p-1.5 rounded-t-sm font-bold text-xs flex justify-between items-center" style={{ backgroundColor: color, color: 'var(--text-bg)' }}>
         <span>Outcome / Ending</span>
@@ -63,7 +63,7 @@ export function OutcomeNode({ data, id }: NodeProps) {
         />
 
         <select
-          className="w-full text-xs p-1 border rounded nodrag"
+          className="w-full text-xs p-1 border rounded nodrag focus:outline-none"
           style={{ backgroundColor: 'var(--text-bg)', color: 'var(--text-color)', borderColor: color }}
           value={type}
           onChange={(e) => updateType(e.target.value)}

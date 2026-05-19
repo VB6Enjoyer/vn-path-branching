@@ -22,7 +22,7 @@ export function TextNode({ data, id }: NodeProps) {
 
   return (
     <div className="border-2 rounded-lg shadow-lg w-48 group" style={{ borderColor: 'var(--note-color)', backgroundColor: 'var(--text-bg)' }}>
-      <Handle type="target" position={Position.Top} className="w-5 h-5" style={{ backgroundColor: 'var(--note-color)', border: 'none' }} />
+      <Handle type="target" position={Position.Top} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100" style={{ backgroundColor: 'var(--note-color)' }} />
 
       <div className="p-1.5 rounded-t-sm font-bold text-xs flex justify-between items-center" style={{ backgroundColor: 'var(--note-color)', color: 'var(--text-bg)' }}>
         <span>Note / Event</span>
@@ -46,7 +46,7 @@ export function TextNode({ data, id }: NodeProps) {
         />
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="w-5 h-5" style={{ backgroundColor: 'var(--note-color)', border: 'none' }} />
+      <Handle type="source" position={Position.Bottom} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100 hover:scale-110 transition-transform" style={{ backgroundColor: 'var(--note-color)' }} />
     </div>
   );
 }

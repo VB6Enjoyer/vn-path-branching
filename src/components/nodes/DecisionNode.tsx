@@ -1,11 +1,27 @@
-import React, { useState } from 'react';
-import { Handle, Position, NodeProps } from '@xyflow/react';
+import React, { useState, useMemo } from 'react';
+import { Handle, Position, NodeProps, useConnection } from '@xyflow/react';
 import { Plus, X, Trash2, Eye, EyeOff } from 'lucide-react';
 
 export function DecisionNode({ data, id }: NodeProps) {
   const [choices, setChoices] = useState<string[]>((data.choices as string[]) || ['Choice 1', 'Choice 2']);
   const [prompt, setPrompt] = useState<string>((data.prompt as string) || 'Decision');
   const [isTextHidden, setIsTextHidden] = useState<boolean>((data.isTextHidden as boolean) || false);
+
+  // Track hover state for handles
+  const [hoveredHandleIndex, setHoveredHandleIndex] = useState<number | null>(null);
+
+  // Track active connection
+  const connection = useConnection();
+
+  // If we are currently making a connection FROM this node, identify which handle is being dragged
+  const activeDragIndex = useMemo(() => {
+    if (connection.inProgress && connection.fromNode?.id === id && connection.fromHandle?.id) {
+       const indexStr = connection.fromHandle.id.replace('choice-', '');
+       const index = parseInt(indexStr, 10);
+       if (!isNaN(index)) return index;
+    }
+    return null;
+  }, [connection, id]);
 
   const addChoice = () => {
     const newChoices = [...choices, `Choice ${choices.length + 1}`];
@@ -64,7 +80,7 @@ export function DecisionNode({ data, id }: NodeProps) {
 
   return (
     <div className="border-2 rounded-lg shadow-lg w-64 group" style={{ borderColor: 'var(--decision-color)', backgroundColor: 'var(--text-bg)' }}>
-      <Handle type="target" position={Position.Top} className="w-5 h-5" style={{ backgroundColor: 'var(--decision-color)', border: 'none' }} />
+      <Handle type="target" position={Position.Top} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100" style={{ backgroundColor: 'var(--decision-color)' }} />
 
       <div className="p-2 rounded-t-sm font-bold text-sm flex justify-between items-center" style={{ backgroundColor: 'var(--decision-color)', color: 'var(--text-bg)' }}>
         <span>Decision</span>
@@ -89,7 +105,7 @@ export function DecisionNode({ data, id }: NodeProps) {
       <div className="p-3">
         {!isTextHidden && (
           <textarea
-            className="w-full text-sm p-2 border rounded mb-3 resize-none nodrag"
+            className="w-full text-sm p-2 border rounded mb-3 resize-none nodrag focus:outline-none"
             style={{ backgroundColor: 'var(--text-bg)', color: 'var(--text-color)', borderColor: 'var(--decision-color)' }}
             rows={2}
             value={prompt}
@@ -100,22 +116,25 @@ export function DecisionNode({ data, id }: NodeProps) {
 
         <div className="space-y-2 mb-3">
           <div className="text-xs font-semibold uppercase" style={{ color: 'var(--decision-color)', opacity: 0.8 }}>Choices</div>
-          {choices.map((choice, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <input
-                className="flex-1 text-sm p-1 border rounded nodrag"
-                style={{ backgroundColor: 'var(--text-bg)', color: 'var(--text-color)', borderColor: 'var(--decision-color)' }}
-                value={choice}
-                onChange={(e) => updateChoice(index, e.target.value)}
-              />
-              <button
-                onClick={() => removeChoice(index)}
-                className="text-red-500 hover:bg-red-100 p-1 rounded transition-colors"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ))}
+          {choices.map((choice, index) => {
+            const isHighlighted = hoveredHandleIndex === index || activeDragIndex === index;
+            return (
+              <div key={index} className="flex items-center gap-2">
+                <input
+                  className={`flex-1 text-sm p-1 border rounded nodrag focus:outline-none transition-shadow ${isHighlighted ? 'ring-2 ring-offset-1 ring-blue-400 dark:ring-blue-500' : ''}`}
+                  style={{ backgroundColor: 'var(--text-bg)', color: 'var(--text-color)', borderColor: 'var(--decision-color)' }}
+                  value={choice}
+                  onChange={(e) => updateChoice(index, e.target.value)}
+                />
+                <button
+                  onClick={() => removeChoice(index)}
+                  className="text-red-500 hover:bg-red-100 p-1 rounded transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         <button
@@ -128,14 +147,19 @@ export function DecisionNode({ data, id }: NodeProps) {
       </div>
 
       {choices.map((_, index) => (
-        <Handle
-          key={`choice-${index}`}
-          type="source"
-          position={Position.Bottom}
-          id={`choice-${index}`}
-          style={{ left: getHandlePosition(index, choices.length), backgroundColor: 'var(--decision-color)', border: 'none' }}
-          className="w-5 h-5"
-        />
+        <div
+           key={`handle-wrapper-${index}`}
+           onMouseEnter={() => setHoveredHandleIndex(index)}
+           onMouseLeave={() => setHoveredHandleIndex(null)}
+        >
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id={`choice-${index}`}
+            style={{ left: getHandlePosition(index, choices.length), backgroundColor: 'var(--decision-color)' }}
+            className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100 hover:scale-110 transition-transform"
+          />
+        </div>
       ))}
     </div>
   );
