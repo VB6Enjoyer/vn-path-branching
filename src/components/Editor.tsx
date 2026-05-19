@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw } from 'lucide-react';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge } from './nodes';
 import { getLayoutedElements } from '../utils/layout';
@@ -51,6 +51,50 @@ const popularFonts = [
   "Source Sans Pro", "Oswald", "Raleway", "Playfair Display", "Merriweather"
 ];
 
+const SettingRow = ({
+  label,
+  settingKey,
+  type = "color",
+  list,
+  activeTheme,
+  activeDefaultTheme,
+  resetSetting,
+  updateActiveTheme
+}: {
+  label: string,
+  settingKey: keyof ThemeSettings,
+  type?: "color" | "text",
+  list?: string,
+  activeTheme: ThemeSettings,
+  activeDefaultTheme: ThemeSettings,
+  resetSetting: (key: keyof ThemeSettings) => void,
+  updateActiveTheme: (key: keyof ThemeSettings, value: string) => void
+}) => {
+  const isDefault = activeTheme[settingKey] === activeDefaultTheme[settingKey];
+  return (
+    <div className="flex justify-between items-center group/row">
+      <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex-1">{label}</label>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => resetSetting(settingKey)}
+          className={`text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-opacity p-0.5 rounded ${isDefault ? 'opacity-0 cursor-default' : 'opacity-100'}`}
+          disabled={isDefault}
+          title="Reset to default"
+        >
+          <RotateCcw size={12} />
+        </button>
+        <input
+          type={type}
+          list={list}
+          value={activeTheme[settingKey]}
+          onChange={(e) => updateActiveTheme(settingKey, e.target.value)}
+          className={type === 'color' ? "w-8 h-8 rounded cursor-pointer border-0 p-0" : "w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"}
+        />
+      </div>
+    </div>
+  );
+};
+
 function FlowEditor() {
   const { fitView, screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -70,10 +114,13 @@ function FlowEditor() {
   const [showSettings, setShowSettings] = useState(false);
 
   const activeTheme = isDarkMode ? darkTheme : lightTheme;
+  const activeDefaultTheme = isDarkMode ? defaultDarkTheme : defaultLightTheme;
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [menu, setMenu] = useState<{ x: number, y: number, show: boolean, params?: {source: string, sourceHandle?: string} }>({ x: 0, y: 0, show: false });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  const isConnectingRef = useRef(false);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -133,11 +180,26 @@ function FlowEditor() {
     }
   };
 
-  const updateActiveTheme = (key: keyof ThemeSettings, value: string) => {
+  const updateActiveTheme = useCallback((key: keyof ThemeSettings, value: string) => {
     if (isDarkMode) {
       setDarkTheme(prev => ({ ...prev, [key]: value }));
     } else {
       setLightTheme(prev => ({ ...prev, [key]: value }));
+    }
+  }, [isDarkMode]);
+
+  const resetSetting = useCallback((key: keyof ThemeSettings) => {
+    if (isDarkMode) {
+      setDarkTheme(prev => ({ ...prev, [key]: defaultDarkTheme[key] }));
+    } else {
+      setLightTheme(prev => ({ ...prev, [key]: defaultLightTheme[key] }));
+    }
+  }, [isDarkMode]);
+
+  const resetAllSettings = () => {
+    if (window.confirm("Are you sure you want to reset all visual settings to their defaults? This affects both Light and Dark modes.")) {
+      setLightTheme(defaultLightTheme);
+      setDarkTheme(defaultDarkTheme);
     }
   };
 
@@ -190,6 +252,10 @@ function FlowEditor() {
     });
   }, [nodes, updateNodeData, deleteNode, setEdges]);
 
+  const onConnectStart = useCallback(() => {
+    isConnectingRef.current = true;
+  }, []);
+
   const onConnect = useCallback(
     (params: Connection) => {
       let label = '';
@@ -208,6 +274,8 @@ function FlowEditor() {
         animated: true,
         label,
       }, eds));
+
+      isConnectingRef.current = false;
     },
     [setEdges, nodes],
   );
@@ -254,11 +322,16 @@ function FlowEditor() {
           });
         }
       }
+
+      setTimeout(() => {
+        isConnectingRef.current = false;
+      }, 50);
     },
     [onConnect]
   );
 
   const onPaneClick = useCallback(() => {
+    if (isConnectingRef.current) return;
     setMenu({ show: false, x: 0, y: 0 });
   }, []);
 
@@ -415,13 +488,14 @@ function FlowEditor() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
           onPaneClick={onPaneClick}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           colorMode={isDarkMode ? 'dark' : 'light'}
           fitView
-          className="transition-colors"
+          className=""
         >
           <Background gap={12} size={1} color={isDarkMode ? '#374151' : '#cbd5e1'} />
           <Controls className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" />
@@ -482,55 +556,33 @@ function FlowEditor() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Google Font</label>
-                <input
-                  type="text"
-                  list="fonts"
-                  value={activeTheme.fontFamily}
-                  onChange={(e) => updateActiveTheme('fontFamily', e.target.value)}
-                  className="w-full text-sm p-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"
-                />
+                <SettingRow label="Google Font" settingKey="fontFamily" type="text" list="fonts" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <datalist id="fonts">
                   {popularFonts.map(f => <option key={f} value={f} />)}
                 </datalist>
               </div>
 
               <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Canvas Bg</label>
-                  <input type="color" value={activeTheme.canvasBg} onChange={(e) => updateActiveTheme('canvasBg', e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Text Box Bg</label>
-                  <input type="color" value={activeTheme.textBg} onChange={(e) => updateActiveTheme('textBg', e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Text Color</label>
-                  <input type="color" value={activeTheme.textColor} onChange={(e) => updateActiveTheme('textColor', e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-                </div>
+                <SettingRow label="Canvas Bg" settingKey="canvasBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Text Box Bg" settingKey="textBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Text Color" settingKey="textColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
               </div>
 
               <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Decision Node</label>
-                  <input type="color" value={activeTheme.decisionColor} onChange={(e) => updateActiveTheme('decisionColor', e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Note Node</label>
-                  <input type="color" value={activeTheme.noteColor} onChange={(e) => updateActiveTheme('noteColor', e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Outcome (Good)</label>
-                  <input type="color" value={activeTheme.outcomeGoodColor} onChange={(e) => updateActiveTheme('outcomeGoodColor', e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Outcome (Neutral)</label>
-                  <input type="color" value={activeTheme.outcomeNeutralColor} onChange={(e) => updateActiveTheme('outcomeNeutralColor', e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Outcome (Bad)</label>
-                  <input type="color" value={activeTheme.outcomeBadColor} onChange={(e) => updateActiveTheme('outcomeBadColor', e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
-                </div>
+                <SettingRow label="Decision Node" settingKey="decisionColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Note Node" settingKey="noteColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Outcome (Good)" settingKey="outcomeGoodColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Outcome (Neutral)" settingKey="outcomeNeutralColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Outcome (Bad)" settingKey="outcomeBadColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-700 mt-1">
+                <button
+                  onClick={resetAllSettings}
+                  className="w-full py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded border border-red-200 dark:border-red-800 transition"
+                >
+                  Reset All Settings to Defaults
+                </button>
               </div>
             </Panel>
           )}
