@@ -188,28 +188,57 @@ function FlowEditor() {
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: { isValid: boolean | null; fromNode: Node | null; fromHandle: { id?: string | null } | null }) => {
       if (!connectionState.isValid && connectionState.fromNode) {
-        let x = 0, y = 0;
+        let clientX = 0, clientY = 0;
         if (event instanceof MouseEvent) {
-          x = event.clientX;
-          y = event.clientY;
+          clientX = event.clientX;
+          clientY = event.clientY;
         } else if (event instanceof TouchEvent && event.touches.length > 0) {
-          x = event.touches[0].clientX;
-          y = event.touches[0].clientY;
+          clientX = event.touches[0].clientX;
+          clientY = event.touches[0].clientY;
         }
 
-        setMenu({
-          show: true,
-          x,
-          y,
-          params: {
-            source: connectionState.fromNode.id,
-            sourceHandle: connectionState.fromHandle?.id || undefined,
+        // 1. Check if the connection was dropped on ANY part of a node
+        const target = document.elementFromPoint(clientX, clientY);
+        // Climb the tree to see if we hit a node
+        const nodeElement = target?.closest('.react-flow__node');
+
+        if (nodeElement) {
+          const targetNodeId = nodeElement.getAttribute('data-id');
+          if (targetNodeId && targetNodeId !== connectionState.fromNode.id) {
+            // Found a node, connect directly to it
+            const params: Connection = {
+              source: connectionState.fromNode.id,
+              sourceHandle: connectionState.fromHandle?.id || null,
+              target: targetNodeId,
+              targetHandle: null
+            };
+            onConnect(params);
+            return;
           }
-        });
+        }
+
+        // 2. If not on a node, show context menu
+        // Need to calculate position relative to wrapper for the menu overlay
+        if (reactFlowWrapper.current) {
+          const { top, left } = reactFlowWrapper.current.getBoundingClientRect();
+          setMenu({
+            show: true,
+            x: clientX - left,
+            y: clientY - top,
+            params: {
+              source: connectionState.fromNode.id,
+              sourceHandle: connectionState.fromHandle?.id || undefined,
+            }
+          });
+        }
       }
     },
-    []
+    [onConnect]
   );
+
+  const onPaneClick = useCallback(() => {
+    setMenu({ show: false, x: 0, y: 0 });
+  }, []);
 
   const onLayout = useCallback(
     (direction: string) => {
@@ -224,10 +253,12 @@ function FlowEditor() {
     [nodes, edges, setNodes, setEdges]
   );
 
-  const addNode = (type: 'decision' | 'text' | 'outcome', x?: number, y?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
+  const addNode = (type: 'decision' | 'text' | 'outcome', menuX?: number, menuY?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
     let position = { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 100 };
-    if (x !== undefined && y !== undefined) {
-      position = screenToFlowPosition({ x, y });
+    if (menuX !== undefined && menuY !== undefined && reactFlowWrapper.current) {
+       // Convert screen coordinates back from our menu local wrapper coordinates
+       const { left, top } = reactFlowWrapper.current.getBoundingClientRect();
+       position = screenToFlowPosition({ x: menuX + left, y: menuY + top });
     }
 
     const id = uuidv4();
@@ -256,7 +287,7 @@ function FlowEditor() {
        }
 
        setEdges((eds) => addEdge({
-         id: `e-${connectionParams.source}-${id}`, // explicit id
+         id: `e-${connectionParams.source}-${id}`,
          source: connectionParams.source,
          sourceHandle: connectionParams.sourceHandle || null,
          target: id,
@@ -322,7 +353,7 @@ function FlowEditor() {
   };
 
   return (
-    <div className="w-full h-screen relative bg-gray-50 dark:bg-gray-900 transition-colors" ref={reactFlowWrapper} onClick={() => setMenu({ show: false, x: 0, y: 0 })}>
+    <div className="w-full h-screen relative bg-gray-50 dark:bg-gray-900 transition-colors" ref={reactFlowWrapper}>
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edges}
@@ -330,6 +361,7 @@ function FlowEditor() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
+        onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         colorMode={isDarkMode ? 'dark' : 'light'}
