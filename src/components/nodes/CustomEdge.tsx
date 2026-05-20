@@ -19,6 +19,7 @@ export function CustomEdge({
   style,
   markerEnd,
   label,
+  data
 }: EdgeProps) {
   const { setEdges } = useReactFlow();
   const [edgePath, labelX, labelY] = getBezierPath({
@@ -34,9 +35,15 @@ export function CustomEdge({
     setEdges((edges) => edges.filter((edge) => edge.id !== id));
   };
 
+  const isHighlighted = !!data?.isHighlighted;
+
+  const edgeStyle = isHighlighted
+    ? { ...style, stroke: 'var(--path-highlight-color)', strokeWidth: 4, filter: 'drop-shadow(0 0 4px var(--path-highlight-color))' }
+    : style;
+
   return (
     <>
-      <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={edgeStyle} />
       <EdgeLabelRenderer>
         <div
           style={{
@@ -46,9 +53,10 @@ export function CustomEdge({
             pointerEvents: 'all',
             backgroundColor: 'var(--text-bg)',
             color: 'var(--text-color)',
-            borderColor: 'var(--text-color)'
+            borderColor: isHighlighted ? 'var(--path-highlight-color)' : 'var(--text-color)',
+            boxShadow: isHighlighted ? '0 0 8px var(--path-highlight-color)' : undefined
           }}
-          className="nodrag nopan flex items-center gap-1 border px-2 py-1 rounded shadow-sm opacity-90"
+          className="nodrag nopan flex items-center gap-1 border px-2 py-1 rounded shadow-sm opacity-90 transition-all"
         >
           {label && <span className="font-semibold">{label}</span>}
           <button

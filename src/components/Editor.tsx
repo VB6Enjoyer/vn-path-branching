@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2 } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints } from 'lucide-react';
 import debounce from 'lodash.debounce';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge } from './nodes';
@@ -46,6 +46,7 @@ const initialNodes: Node[] = [
 
 const initialEdges: Edge[] = [];
 
+// Popular Google Fonts for the datalist
 const popularFonts = [
   "Inter", "Roboto", "Open Sans", "Lato", "Montserrat", "Poppins",
   "Source Sans Pro", "Oswald", "Raleway", "Playfair Display", "Merriweather"
@@ -86,7 +87,7 @@ const SettingRow = ({
         <input
           type={type}
           list={list}
-          value={activeTheme[settingKey]}
+          value={activeTheme[settingKey] || ''}
           onChange={(e) => updateActiveTheme(settingKey, e.target.value)}
           className={type === 'color' ? "w-8 h-8 rounded cursor-pointer border-0 p-0" : "w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"}
         />
@@ -106,6 +107,7 @@ const getCleanNodes = (nodesToClean: Node[]) => {
     delete cleanData.onDelete;
     delete cleanData.onTextHiddenChange;
     delete cleanData.onMediaUrlChange;
+    delete cleanData.isHighlighted; // Don't persist highlight state
 
     const cleanNode = { ...n, data: cleanData };
     if (cleanNode.measured) {
@@ -156,6 +158,9 @@ function FlowEditor() {
   const [past, setPast] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
   const [future, setFuture] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
 
+  // Track currently highlighted target node for pathfinding
+  const [highlightedTargetId, setHighlightedTargetId] = useState<string | null>(null);
+
   const takeSnapshot = useCallback(() => {
     setPast((prev) => {
       const currentClean = { nodes: getCleanNodes(nodes), edges };
@@ -193,6 +198,7 @@ function FlowEditor() {
 
     setNodes(previous.nodes);
     setEdges(previous.edges);
+    setHighlightedTargetId(null);
   }, [past, nodes, edges, setNodes, setEdges]);
 
   const redo = useCallback(() => {
@@ -209,6 +215,7 @@ function FlowEditor() {
 
     setNodes(next.nodes);
     setEdges(next.edges);
+    setHighlightedTargetId(null);
   }, [future, nodes, edges, setNodes, setEdges]);
 
   useEffect(() => {
@@ -244,8 +251,8 @@ function FlowEditor() {
           setEdges(flow.edges);
         }
         if (flow && flow.settings) {
-          if (flow.settings.light) setTimeout(() => setLightTheme(flow.settings.light), 0);
-          if (flow.settings.dark) setTimeout(() => setDarkTheme(flow.settings.dark), 0);
+          if (flow.settings.light) setTimeout(() => setLightTheme({ ...defaultLightTheme, ...flow.settings.light }), 0);
+          if (flow.settings.dark) setTimeout(() => setDarkTheme({ ...defaultDarkTheme, ...flow.settings.dark }), 0);
         }
       } catch (err) {
         console.error("Failed to load saved flow", err);
@@ -308,16 +315,15 @@ function FlowEditor() {
       setEdges(initialEdges);
       setLightTheme(defaultLightTheme);
       setDarkTheme(defaultDarkTheme);
+      setHighlightedTargetId(null);
     }
   };
 
-  // This useCallback dependency array needs to be correct to ensure it uses the freshest nodes state
   const updateNodeData = useCallback((nodeId: string, newData: Record<string, unknown>, immediateSnapshot: boolean = false) => {
     triggerSnapshot(immediateSnapshot);
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === nodeId) {
-          // It's vital we don't accidentally wipe out non-updated data
           return { ...node, data: { ...node.data, ...newData } };
         }
         return node;
@@ -329,11 +335,40 @@ function FlowEditor() {
     triggerSnapshot(true);
     setNodes((nds) => nds.filter((n) => n.id !== nodeId));
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
-  }, [setNodes, setEdges, triggerSnapshot]);
+    if (highlightedTargetId === nodeId) setHighlightedTargetId(null);
+  }, [setNodes, setEdges, triggerSnapshot, highlightedTargetId]);
+
+  // Pathfinding logic: compute all ancestor nodes and edges given a target node ID
+  const { highlightedNodeIds, highlightedEdgeIds } = useMemo(() => {
+    const nodeSet = new Set<string>();
+    const edgeSet = new Set<string>();
+
+    if (!highlightedTargetId) return { highlightedNodeIds: nodeSet, highlightedEdgeIds: edgeSet };
+
+    const queue = [highlightedTargetId];
+    nodeSet.add(highlightedTargetId);
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      // Find all edges that target the current node
+      edges.forEach(edge => {
+        if (edge.target === current) {
+          edgeSet.add(edge.id);
+          if (!nodeSet.has(edge.source)) {
+            nodeSet.add(edge.source);
+            queue.push(edge.source);
+          }
+        }
+      });
+    }
+
+    return { highlightedNodeIds: nodeSet, highlightedEdgeIds: edgeSet };
+  }, [edges, highlightedTargetId]);
 
   const nodesWithCallbacks = useMemo(() => {
     return nodes.map(node => {
-      const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode };
+      const isHighlighted = highlightedNodeIds.has(node.id);
+      const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode, isHighlighted };
 
       if (node.type === 'decision') {
         data.onChoicesChange = (id: string, choices: string[]) => {
@@ -364,7 +399,7 @@ function FlowEditor() {
 
       return { ...node, data };
     });
-  }, [nodes, updateNodeData, deleteNode, setEdges]);
+  }, [nodes, updateNodeData, deleteNode, setEdges, highlightedNodeIds]);
 
   const onConnectStart = useCallback(() => {
     isConnectingRef.current = true;
@@ -486,6 +521,7 @@ function FlowEditor() {
   const onPaneClick = useCallback(() => {
     if (isConnectingRef.current) return;
     setMenu(prev => ({ ...prev, show: false }));
+    setHighlightedTargetId(null); // Clear highlight on pane click
   }, []);
 
   const onLayout = useCallback(
@@ -558,8 +594,6 @@ function FlowEditor() {
     switch (action) {
       case 'add_choice':
         if (node.type === 'decision') {
-          // When creating a new choice, we must explicitly lookup the FRESH node from the 'nodes' array,
-          // because the node in menu.targetNode is a stale snapshot from the exact moment they right-clicked.
           const freshNode = nodes.find(n => n.id === id);
           if (freshNode) {
              const currentChoices = (freshNode.data.choices as string[]) || [];
@@ -574,6 +608,9 @@ function FlowEditor() {
           const isHidden = !!freshNodeForText.data.isTextHidden;
           updateNodeData(id, { isTextHidden: !isHidden }, true);
         }
+        break;
+      case 'highlight_path':
+        setHighlightedTargetId(id);
         break;
       case 'delete':
         deleteNode(id);
@@ -617,10 +654,11 @@ function FlowEditor() {
           triggerSnapshot(true);
           setNodes(flow.nodes);
           setEdges(flow.edges);
+          setHighlightedTargetId(null);
         }
         if (flow && flow.settings) {
-          if (flow.settings.light) setTimeout(() => setLightTheme(flow.settings.light), 0);
-          if (flow.settings.dark) setTimeout(() => setDarkTheme(flow.settings.dark), 0);
+          if (flow.settings.light) setTimeout(() => setLightTheme({ ...defaultLightTheme, ...flow.settings.light }), 0);
+          if (flow.settings.dark) setTimeout(() => setDarkTheme({ ...defaultDarkTheme, ...flow.settings.dark }), 0);
         }
       } catch (err) {
         alert("Error parsing JSON file");
@@ -643,9 +681,13 @@ function FlowEditor() {
   const edgesWithCallbacks = useMemo(() => {
     return edges.map(edge => ({
       ...edge,
-      data: { ...edge.data, onDelete: handleDeleteEdge }
+      data: {
+        ...edge.data,
+        onDelete: handleDeleteEdge,
+        isHighlighted: highlightedEdgeIds.has(edge.id)
+      }
     }));
-  }, [edges, handleDeleteEdge]);
+  }, [edges, handleDeleteEdge, highlightedEdgeIds]);
 
   return (
     <>
@@ -662,6 +704,7 @@ function FlowEditor() {
           --outcome-good-color: ${activeTheme.outcomeGoodColor};
           --outcome-bad-color: ${activeTheme.outcomeBadColor};
           --outcome-neutral-color: ${activeTheme.outcomeNeutralColor};
+          --path-highlight-color: ${activeTheme.pathHighlightColor || '#22d3ee'};
         }
 
         .custom-font-family {
@@ -787,6 +830,7 @@ function FlowEditor() {
                 <SettingRow label="Canvas Bg" settingKey="canvasBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Text Box Bg" settingKey="textBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Text Color" settingKey="textColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Path Glow" settingKey="pathHighlightColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
               </div>
 
               <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
@@ -837,6 +881,10 @@ function FlowEditor() {
                     <EyeOff size={14} /> Toggle Text Visibility
                   </button>
                 )}
+
+                <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('highlight_path')}>
+                  <Waypoints size={14} /> Show Path to Node
+                </button>
 
                 <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => handleMenuNodeAction('delete')}>
                   <Trash2 size={14} /> Delete Node

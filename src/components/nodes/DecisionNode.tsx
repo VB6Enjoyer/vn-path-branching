@@ -7,7 +7,6 @@ export function DecisionNode({ data, id }: NodeProps) {
   const [prompt, setPrompt] = useState<string>((data.prompt as string) || 'Decision');
   const [isTextHidden, setIsTextHidden] = useState<boolean>((data.isTextHidden as boolean) || false);
 
-  // Sync state from parent data changes (e.g. from context menu or undo/redo)
   useEffect(() => {
     if (Array.isArray(data.choices)) setTimeout(() => setChoices(data.choices as string[]), 0);
     if (typeof data.prompt === 'string') setTimeout(() => setPrompt(data.prompt as string), 0);
@@ -15,7 +14,6 @@ export function DecisionNode({ data, id }: NodeProps) {
   }, [data.choices, data.prompt, data.isTextHidden]);
 
   const [hoveredHandleIndex, setHoveredHandleIndex] = useState<number | null>(null);
-
   const connection = useConnection();
 
   const activeDragIndex = useMemo(() => {
@@ -82,11 +80,15 @@ export function DecisionNode({ data, id }: NodeProps) {
     return `${index * step}%`;
   };
 
+  const isHighlighted = !!data.isHighlighted;
+  const borderColor = isHighlighted ? 'var(--path-highlight-color)' : 'var(--decision-color)';
+  const boxShadow = isHighlighted ? '0 0 15px var(--path-highlight-color)' : undefined;
+
   return (
-    <div className="border-2 rounded-lg shadow-lg w-64 group" style={{ borderColor: 'var(--decision-color)', backgroundColor: 'var(--text-bg)' }}>
+    <div className="border-2 rounded-lg shadow-lg w-64 group transition-all" style={{ borderColor, backgroundColor: 'var(--text-bg)', boxShadow }}>
       <Handle type="target" position={Position.Top} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100" style={{ backgroundColor: 'var(--decision-color)' }} />
 
-      <div className="p-2 rounded-t-sm font-bold text-sm flex justify-between items-center" style={{ backgroundColor: 'var(--decision-color)', color: 'var(--text-bg)' }}>
+      <div className="p-2 rounded-t-sm font-bold text-sm flex justify-between items-center transition-colors" style={{ backgroundColor: borderColor, color: 'var(--text-bg)' }}>
         <span>Decision</span>
         <div className="flex gap-1">
           <button
@@ -121,11 +123,11 @@ export function DecisionNode({ data, id }: NodeProps) {
         <div className="space-y-2 mb-3">
           <div className="text-xs font-semibold uppercase" style={{ color: 'var(--decision-color)', opacity: 0.8 }}>Choices</div>
           {choices.map((choice, index) => {
-            const isHighlighted = hoveredHandleIndex === index || activeDragIndex === index;
+            const isChoiceHighlighted = hoveredHandleIndex === index || activeDragIndex === index;
             return (
               <div key={index} className="flex items-center gap-2">
                 <input
-                  className={`flex-1 text-sm p-1 border rounded nodrag focus:outline-none transition-shadow ${isHighlighted ? 'ring-2 ring-offset-1 ring-blue-400 dark:ring-blue-500' : ''}`}
+                  className={`flex-1 text-sm p-1 border rounded nodrag focus:outline-none transition-shadow ${isChoiceHighlighted ? 'ring-2 ring-offset-1 ring-blue-400 dark:ring-blue-500' : ''}`}
                   style={{ backgroundColor: 'var(--text-bg)', color: 'var(--text-color)', borderColor: 'var(--decision-color)' }}
                   value={choice}
                   onChange={(e) => updateChoice(index, e.target.value)}

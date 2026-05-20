@@ -10,7 +10,6 @@ export function TextNode({ data, id, selected }: NodeProps) {
   const [isFullscreenPreview, setIsFullscreenPreview] = useState<boolean>(false);
   const [isTextHidden, setIsTextHidden] = useState<boolean>((data.isTextHidden as boolean) || false);
 
-  // Sync state from parent data changes
   useEffect(() => {
     if (typeof data.content === 'string') setTimeout(() => setContent(data.content as string), 0);
     if (typeof data.mediaUrl === 'string') setTimeout(() => setMediaUrl(data.mediaUrl as string), 0);
@@ -67,19 +66,23 @@ export function TextNode({ data, id, selected }: NodeProps) {
 
   const isYouTube = (url: string) => getYouTubeId(url) !== null;
 
+  const isHighlighted = !!data.isHighlighted;
+  const borderColor = isHighlighted ? 'var(--path-highlight-color)' : 'var(--note-color)';
+  const boxShadow = isHighlighted ? '0 0 15px var(--path-highlight-color)' : undefined;
+
   return (
     <>
       <NodeResizer
-        color="var(--note-color)"
+        color={borderColor}
         isVisible={selected}
         minWidth={192}
         minHeight={100}
         keepAspectRatio={mediaUrl !== ''}
       />
-      <div className="border-2 rounded-lg shadow-lg group flex flex-col w-full h-full" style={{ borderColor: 'var(--note-color)', backgroundColor: 'var(--text-bg)' }}>
+      <div className="border-2 rounded-lg shadow-lg group flex flex-col w-full h-full transition-all" style={{ borderColor, backgroundColor: 'var(--text-bg)', boxShadow }}>
         <Handle type="target" position={Position.Top} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100" style={{ backgroundColor: 'var(--note-color)' }} />
 
-        <div className="p-1.5 rounded-t-sm font-bold text-xs flex justify-between items-center" style={{ backgroundColor: 'var(--note-color)', color: 'var(--text-bg)' }}>
+        <div className="p-1.5 rounded-t-sm font-bold text-xs flex justify-between items-center transition-colors" style={{ backgroundColor: borderColor, color: 'var(--text-bg)' }}>
           <span>Note / Event</span>
           <div className="flex gap-1">
             {mediaUrl && (
@@ -174,7 +177,6 @@ export function TextNode({ data, id, selected }: NodeProps) {
         <Handle type="source" position={Position.Bottom} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100 hover:scale-110 transition-transform" style={{ backgroundColor: 'var(--note-color)' }} />
       </div>
 
-      {/* Lightbox Portal */}
       {isFullscreenPreview && typeof document !== 'undefined' && createPortal(
         <div
            className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-8 backdrop-blur-sm cursor-pointer"
