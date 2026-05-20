@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2 } from 'lucide-react';
 import debounce from 'lodash.debounce';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge } from './nodes';
@@ -109,7 +109,6 @@ const getCleanNodes = (nodesToClean: Node[]) => {
     delete cleanData.onTextHiddenChange;
     delete cleanData.onMediaUrlChange;
 
-    // Also remove measured property so it can cleanly re-import without flow size glitches
     const cleanNode = { ...n, data: cleanData };
     if (cleanNode.measured) {
         delete cleanNode.measured;
@@ -134,7 +133,6 @@ function FlowEditor() {
     return false;
   });
 
-  // Theming state
   const [lightTheme, setLightTheme] = useState<ThemeSettings>(defaultLightTheme);
   const [darkTheme, setDarkTheme] = useState<ThemeSettings>(defaultDarkTheme);
   const [showSettings, setShowSettings] = useState(false);
@@ -143,7 +141,17 @@ function FlowEditor() {
   const activeDefaultTheme = isDarkMode ? defaultDarkTheme : defaultLightTheme;
 
   const [isLoaded, setIsLoaded] = useState(false);
-  const [menu, setMenu] = useState<{ x: number, y: number, show: boolean, params?: {source: string, sourceHandle?: string} }>({ x: 0, y: 0, show: false });
+
+  // Extended Context Menu State
+  type MenuState = {
+    show: boolean;
+    x: number;
+    y: number;
+    type: 'create' | 'node';
+    connectionParams?: { source: string; sourceHandle?: string };
+    targetNode?: Node;
+  };
+  const [menu, setMenu] = useState<MenuState>({ show: false, x: 0, y: 0, type: 'create' });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
   const isConnectingRef = useRef(false);
@@ -152,23 +160,20 @@ function FlowEditor() {
   const [past, setPast] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
   const [future, setFuture] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
 
-  // Snapshot logic
   const takeSnapshot = useCallback(() => {
     setPast((prev) => {
       const currentClean = { nodes: getCleanNodes(nodes), edges };
       const newPast = [...prev, currentClean];
       if (newPast.length > MAX_HISTORY) {
-        newPast.shift(); // remove oldest to respect limit
+        newPast.shift();
       }
       return newPast;
     });
-    setFuture([]); // clear redo stack on new action
+    setFuture([]);
   }, [nodes, edges]);
 
-  // Use a ref for the debounced snapshot so it doesn't get recreated on every render
   const debouncedSnapshotRef = useRef(debounce(takeSnapshot, 1000));
 
-  // Keep the ref updated with the latest takeSnapshot
   useEffect(() => {
     debouncedSnapshotRef.current = debounce(takeSnapshot, 1000);
   }, [takeSnapshot]);
@@ -212,13 +217,12 @@ function FlowEditor() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Avoid triggering when user is typing in inputs or textareas
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
         return;
       }
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault(); // stop browser undo
+        e.preventDefault();
         if (e.shiftKey) {
           redo();
         } else {
@@ -335,7 +339,7 @@ function FlowEditor() {
 
       if (node.type === 'decision') {
         data.onChoicesChange = (id: string, choices: string[]) => {
-          updateNodeData(id, { choices }, true); // Structual, snapshot immediately
+          updateNodeData(id, { choices }, true);
           setEdges((eds) => eds.map((e) => {
             if (e.source === id) {
               const choiceIndexStr = e.sourceHandle?.replace('choice-', '');
@@ -349,7 +353,6 @@ function FlowEditor() {
             return e;
           }));
         };
-        // Debounce text changes
         data.onPromptChange = (id: string, prompt: string) => updateNodeData(id, { prompt }, false);
         data.onTextHiddenChange = (id: string, isTextHidden: boolean) => updateNodeData(id, { isTextHidden }, true);
       } else if (node.type === 'text') {
@@ -429,7 +432,8 @@ function FlowEditor() {
             show: true,
             x: clientX - left,
             y: clientY - top,
-            params: {
+            type: 'create',
+            connectionParams: {
               source: connectionState.fromNode.id,
               sourceHandle: connectionState.fromHandle?.id || undefined,
             }
@@ -444,9 +448,46 @@ function FlowEditor() {
     [onConnect]
   );
 
+  const onPaneContextMenu = useCallback(
+    (event: MouseEvent | React.MouseEvent) => {
+      if (event.shiftKey) return; // allow native context menu
+      event.preventDefault();
+
+      if (reactFlowWrapper.current) {
+        const { top, left } = reactFlowWrapper.current.getBoundingClientRect();
+        setMenu({
+          show: true,
+          x: event.clientX - left,
+          y: event.clientY - top,
+          type: 'create',
+        });
+      }
+    },
+    []
+  );
+
+  const onNodeContextMenu = useCallback(
+    (event: MouseEvent | React.MouseEvent, node: Node) => {
+      if (event.shiftKey) return; // allow native context menu
+      event.preventDefault();
+
+      if (reactFlowWrapper.current) {
+        const { top, left } = reactFlowWrapper.current.getBoundingClientRect();
+        setMenu({
+          show: true,
+          x: event.clientX - left,
+          y: event.clientY - top,
+          type: 'node',
+          targetNode: node
+        });
+      }
+    },
+    []
+  );
+
   const onPaneClick = useCallback(() => {
     if (isConnectingRef.current) return;
-    setMenu({ show: false, x: 0, y: 0 });
+    setMenu(prev => ({ ...prev, show: false }));
   }, []);
 
   const onLayout = useCallback(
@@ -507,7 +548,32 @@ function FlowEditor() {
          label
        }, eds));
     }
-    setMenu({ show: false, x: 0, y: 0 });
+    setMenu(prev => ({ ...prev, show: false }));
+  };
+
+  const handleMenuNodeAction = (action: string) => {
+    if (!menu.targetNode) return;
+
+    const node = menu.targetNode;
+    const id = node.id;
+
+    switch (action) {
+      case 'add_choice':
+        if (node.type === 'decision') {
+          const currentChoices = (node.data.choices as string[]) || [];
+          const newChoices = [...currentChoices, `Choice ${currentChoices.length + 1}`];
+          updateNodeData(id, { choices: newChoices }, true);
+        }
+        break;
+      case 'toggle_text':
+        const isHidden = !!node.data.isTextHidden;
+        updateNodeData(id, { isTextHidden: !isHidden }, true);
+        break;
+      case 'delete':
+        deleteNode(id);
+        break;
+    }
+    setMenu(prev => ({ ...prev, show: false }));
   };
 
   const centerOnStart = () => {
@@ -563,13 +629,11 @@ function FlowEditor() {
     triggerSnapshot(true);
   }, [triggerSnapshot]);
 
-  // Hook for Edge deletion
   const handleDeleteEdge = useCallback((edgeId: string) => {
     triggerSnapshot(true);
     setEdges((eds) => eds.filter((e) => e.id !== edgeId));
   }, [setEdges, triggerSnapshot]);
 
-  // Pass handleDeleteEdge to edges
   const edgesWithCallbacks = useMemo(() => {
     return edges.map(edge => ({
       ...edge,
@@ -614,6 +678,8 @@ function FlowEditor() {
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
           onPaneClick={onPaneClick}
+          onPaneContextMenu={onPaneContextMenu}
+          onNodeContextMenu={onNodeContextMenu}
           onNodeDragStart={onNodeDragStart}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
@@ -740,14 +806,37 @@ function FlowEditor() {
 
         {menu.show && (
           <div
-            className="absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-md py-2 w-48 z-50 flex flex-col"
+            className="absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-md py-2 z-50 flex flex-col min-w-40"
             style={{ top: menu.y, left: menu.x }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Create connection to...</div>
-            <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('decision', menu.x, menu.y, menu.params)}>Decision Node</button>
-            <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('text', menu.x, menu.y, menu.params)}>Note / Event Node</button>
-            <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('outcome', menu.x, menu.y, menu.params)}>Outcome Node</button>
+            {menu.type === 'create' ? (
+              <>
+                <div className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase border-b border-gray-100 dark:border-gray-700 mb-1">Create node</div>
+                <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('decision', menu.x, menu.y, menu.connectionParams)}>Decision Node</button>
+                <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('text', menu.x, menu.y, menu.connectionParams)}>Note / Event Node</button>
+                <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('outcome', menu.x, menu.y, menu.connectionParams)}>Outcome Node</button>
+              </>
+            ) : (
+              <>
+                <div className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase border-b border-gray-100 dark:border-gray-700 mb-1">Node Actions</div>
+                {menu.targetNode?.type === 'decision' && (
+                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400" onClick={() => handleMenuNodeAction('add_choice')}>
+                    <Plus size={14} /> Add Choice
+                  </button>
+                )}
+
+                {(menu.targetNode?.type === 'decision' || (menu.targetNode?.type === 'text' && menu.targetNode.data?.mediaUrl)) && (
+                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => handleMenuNodeAction('toggle_text')}>
+                    <EyeOff size={14} /> Toggle Text Visibility
+                  </button>
+                )}
+
+                <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => handleMenuNodeAction('delete')}>
+                  <Trash2 size={14} /> Delete Node
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
