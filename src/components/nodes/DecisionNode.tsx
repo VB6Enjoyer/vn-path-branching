@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Handle, Position, NodeProps, useConnection } from '@xyflow/react';
 import { Plus, X, Trash2, Eye, EyeOff } from 'lucide-react';
 
@@ -7,13 +7,17 @@ export function DecisionNode({ data, id }: NodeProps) {
   const [prompt, setPrompt] = useState<string>((data.prompt as string) || 'Decision');
   const [isTextHidden, setIsTextHidden] = useState<boolean>((data.isTextHidden as boolean) || false);
 
-  // Track hover state for handles
+  // Sync state from parent data changes (e.g. from context menu or undo/redo)
+  useEffect(() => {
+    if (Array.isArray(data.choices)) setTimeout(() => setChoices(data.choices as string[]), 0);
+    if (typeof data.prompt === 'string') setTimeout(() => setPrompt(data.prompt), 0);
+    if (typeof data.isTextHidden === 'boolean') setTimeout(() => setIsTextHidden(data.isTextHidden), 0);
+  }, [data.choices, data.prompt, data.isTextHidden]);
+
   const [hoveredHandleIndex, setHoveredHandleIndex] = useState<number | null>(null);
 
-  // Track active connection
   const connection = useConnection();
 
-  // If we are currently making a connection FROM this node, identify which handle is being dragged
   const activeDragIndex = useMemo(() => {
     if (connection.inProgress && connection.fromNode?.id === id && connection.fromHandle?.id) {
        const indexStr = connection.fromHandle.id.replace('choice-', '');

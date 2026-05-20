@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps, NodeResizer } from '@xyflow/react';
 import { Trash2, Image as ImageIcon, Check, Pencil, X, Eye, EyeOff } from 'lucide-react';
@@ -9,6 +9,13 @@ export function TextNode({ data, id, selected }: NodeProps) {
   const [showMediaInput, setShowMediaInput] = useState<boolean>(false);
   const [isFullscreenPreview, setIsFullscreenPreview] = useState<boolean>(false);
   const [isTextHidden, setIsTextHidden] = useState<boolean>((data.isTextHidden as boolean) || false);
+
+  // Sync state from parent data changes
+  useEffect(() => {
+    if (typeof data.content === 'string') setTimeout(() => setContent(data.content), 0);
+    if (typeof data.mediaUrl === 'string') setTimeout(() => setMediaUrl(data.mediaUrl), 0);
+    if (typeof data.isTextHidden === 'boolean') setTimeout(() => setIsTextHidden(data.isTextHidden), 0);
+  }, [data.content, data.mediaUrl, data.isTextHidden]);
 
   const updateContent = (value: string) => {
     setContent(value);
@@ -22,7 +29,6 @@ export function TextNode({ data, id, selected }: NodeProps) {
     if (typeof data.onMediaUrlChange === 'function') {
       data.onMediaUrlChange(id, value);
     }
-    // Auto unhide text if media is removed and text is currently hidden
     if (value === '' && isTextHidden) {
        setIsTextHidden(false);
        if (typeof data.onTextHiddenChange === 'function') {

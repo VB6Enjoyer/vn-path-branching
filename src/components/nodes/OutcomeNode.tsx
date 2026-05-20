@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Trash2 } from 'lucide-react';
 
 export function OutcomeNode({ data, id }: NodeProps) {
   const [outcome, setOutcome] = useState<string>((data.outcome as string) || 'Ending Name');
   const [type, setType] = useState<string>((data.type as string) || 'neutral');
+
+  // Sync state from parent data changes
+  useEffect(() => {
+    if (typeof data.outcome === 'string') setTimeout(() => setOutcome(data.outcome), 0);
+    if (typeof data.type === 'string') setTimeout(() => setType(data.type), 0);
+  }, [data.outcome, data.type]);
 
   const updateOutcome = (value: string) => {
     setOutcome(value);
