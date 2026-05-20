@@ -18,7 +18,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus } from 'lucide-react';
+import debounce from 'lodash.debounce';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge } from './nodes';
 import { getLayoutedElements } from '../utils/layout';
@@ -95,6 +96,23 @@ const SettingRow = ({
   );
 };
 
+// Clean nodes helper (strips callbacks)
+const getCleanNodes = (nodesToClean: Node[]) => {
+  return nodesToClean.map(n => {
+    const cleanData = { ...n.data };
+    delete cleanData.onChoicesChange;
+    delete cleanData.onPromptChange;
+    delete cleanData.onContentChange;
+    delete cleanData.onOutcomeChange;
+    delete cleanData.onTypeChange;
+    delete cleanData.onDelete;
+    delete cleanData.onTextHiddenChange;
+    return { ...n, data: cleanData };
+  });
+};
+
+const MAX_HISTORY = 30;
+
 function FlowEditor() {
   const { fitView, screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -121,6 +139,82 @@ function FlowEditor() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
   const isConnectingRef = useRef(false);
+
+  // Undo / Redo state
+  const [past, setPast] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
+  const [future, setFuture] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
+
+  // Snapshot logic
+  const takeSnapshot = useCallback(() => {
+    setPast((prev) => {
+      const currentClean = { nodes: getCleanNodes(nodes), edges };
+      const newPast = [...prev, currentClean];
+      if (newPast.length > MAX_HISTORY) {
+        newPast.shift(); // remove oldest to respect limit
+      }
+      return newPast;
+    });
+    setFuture([]); // clear redo stack on new action
+  }, [nodes, edges]);
+
+  // Use a ref for the debounced snapshot so it doesn't get recreated on every render
+  const debouncedSnapshotRef = useRef(debounce(takeSnapshot, 1000));
+
+  // Keep the ref updated with the latest takeSnapshot
+  useEffect(() => {
+    debouncedSnapshotRef.current = debounce(takeSnapshot, 1000);
+  }, [takeSnapshot]);
+
+  const triggerSnapshot = useCallback((immediate: boolean = true) => {
+    if (immediate) {
+      debouncedSnapshotRef.current.cancel();
+      takeSnapshot();
+    } else {
+      debouncedSnapshotRef.current();
+    }
+  }, [takeSnapshot]);
+
+  const undo = useCallback(() => {
+    if (past.length === 0) return;
+    const previous = past[past.length - 1];
+    const newPast = past.slice(0, past.length - 1);
+
+    setFuture((prev) => [{ nodes: getCleanNodes(nodes), edges }, ...prev]);
+    setPast(newPast);
+
+    setNodes(previous.nodes);
+    setEdges(previous.edges);
+  }, [past, nodes, edges, setNodes, setEdges]);
+
+  const redo = useCallback(() => {
+    if (future.length === 0) return;
+    const next = future[0];
+    const newFuture = future.slice(1);
+
+    setPast((prev) => {
+      const newPast = [...prev, { nodes: getCleanNodes(nodes), edges }];
+      if (newPast.length > MAX_HISTORY) newPast.shift();
+      return newPast;
+    });
+    setFuture(newFuture);
+
+    setNodes(next.nodes);
+    setEdges(next.edges);
+  }, [future, nodes, edges, setNodes, setEdges]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -150,19 +244,8 @@ function FlowEditor() {
 
   useEffect(() => {
     if (!isLoaded) return;
-    const cleanNodes = nodes.map(n => {
-      const cleanData = { ...n.data };
-      delete cleanData.onChoicesChange;
-      delete cleanData.onPromptChange;
-      delete cleanData.onContentChange;
-      delete cleanData.onOutcomeChange;
-      delete cleanData.onTypeChange;
-      delete cleanData.onDelete;
-      delete cleanData.onTextHiddenChange;
-      return { ...n, data: cleanData };
-    });
     const saveObj = {
-      nodes: cleanNodes,
+      nodes: getCleanNodes(nodes),
       edges,
       settings: { light: lightTheme, dark: darkTheme }
     };
@@ -203,7 +286,19 @@ function FlowEditor() {
     }
   };
 
-  const updateNodeData = useCallback((nodeId: string, newData: Record<string, unknown>) => {
+  const startFromScratch = () => {
+    if (window.confirm("WARNING: Are you sure you want to start from scratch? This will clear all nodes, connections, and visual settings, and cannot be undone.")) {
+      setPast([]);
+      setFuture([]);
+      setNodes(initialNodes);
+      setEdges(initialEdges);
+      setLightTheme(defaultLightTheme);
+      setDarkTheme(defaultDarkTheme);
+    }
+  };
+
+  const updateNodeData = useCallback((nodeId: string, newData: Record<string, unknown>, immediateSnapshot: boolean = false) => {
+    triggerSnapshot(immediateSnapshot);
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === nodeId) {
@@ -212,12 +307,13 @@ function FlowEditor() {
         return node;
       })
     );
-  }, [setNodes]);
+  }, [setNodes, triggerSnapshot]);
 
   const deleteNode = useCallback((nodeId: string) => {
+    triggerSnapshot(true);
     setNodes((nds) => nds.filter((n) => n.id !== nodeId));
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, triggerSnapshot]);
 
   const nodesWithCallbacks = useMemo(() => {
     return nodes.map(node => {
@@ -225,7 +321,7 @@ function FlowEditor() {
 
       if (node.type === 'decision') {
         data.onChoicesChange = (id: string, choices: string[]) => {
-          updateNodeData(id, { choices });
+          updateNodeData(id, { choices }, true); // Structual, snapshot immediately
           setEdges((eds) => eds.map((e) => {
             if (e.source === id) {
               const choiceIndexStr = e.sourceHandle?.replace('choice-', '');
@@ -239,13 +335,14 @@ function FlowEditor() {
             return e;
           }));
         };
-        data.onPromptChange = (id: string, prompt: string) => updateNodeData(id, { prompt });
-        data.onTextHiddenChange = (id: string, isTextHidden: boolean) => updateNodeData(id, { isTextHidden });
+        // Debounce text changes
+        data.onPromptChange = (id: string, prompt: string) => updateNodeData(id, { prompt }, false);
+        data.onTextHiddenChange = (id: string, isTextHidden: boolean) => updateNodeData(id, { isTextHidden }, true);
       } else if (node.type === 'text') {
-        data.onContentChange = (id: string, content: string) => updateNodeData(id, { content });
+        data.onContentChange = (id: string, content: string) => updateNodeData(id, { content }, false);
       } else if (node.type === 'outcome') {
-        data.onOutcomeChange = (id: string, outcome: string) => updateNodeData(id, { outcome });
-        data.onTypeChange = (id: string, type: string) => updateNodeData(id, { type });
+        data.onOutcomeChange = (id: string, outcome: string) => updateNodeData(id, { outcome }, false);
+        data.onTypeChange = (id: string, type: string) => updateNodeData(id, { type }, true);
       }
 
       return { ...node, data };
@@ -258,6 +355,7 @@ function FlowEditor() {
 
   const onConnect = useCallback(
     (params: Connection) => {
+      triggerSnapshot(true);
       let label = '';
       if (params.sourceHandle?.startsWith('choice-')) {
         const sourceNode = nodes.find(n => n.id === params.source);
@@ -277,7 +375,7 @@ function FlowEditor() {
 
       isConnectingRef.current = false;
     },
-    [setEdges, nodes],
+    [setEdges, nodes, triggerSnapshot],
   );
 
   const onConnectEnd = useCallback(
@@ -337,6 +435,7 @@ function FlowEditor() {
 
   const onLayout = useCallback(
     (direction: string) => {
+      triggerSnapshot(true);
       const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
         nodes,
         edges,
@@ -345,10 +444,11 @@ function FlowEditor() {
       setNodes([...layoutedNodes]);
       setEdges([...layoutedEdges]);
     },
-    [nodes, edges, setNodes, setEdges]
+    [nodes, edges, setNodes, setEdges, triggerSnapshot]
   );
 
   const addNode = (type: 'decision' | 'text' | 'outcome', menuX?: number, menuY?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
+    triggerSnapshot(true);
     let position = { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 100 };
     if (menuX !== undefined && menuY !== undefined && reactFlowWrapper.current) {
        const { left, top } = reactFlowWrapper.current.getBoundingClientRect();
@@ -402,20 +502,8 @@ function FlowEditor() {
   };
 
   const onExport = () => {
-    const cleanNodes = nodes.map(n => {
-        const cleanData = { ...n.data };
-        delete cleanData.onChoicesChange;
-        delete cleanData.onPromptChange;
-        delete cleanData.onContentChange;
-        delete cleanData.onOutcomeChange;
-        delete cleanData.onTypeChange;
-        delete cleanData.onDelete;
-        delete cleanData.onTextHiddenChange;
-        return { ...n, data: cleanData };
-    });
-
     const saveObj = {
-      nodes: cleanNodes,
+      nodes: getCleanNodes(nodes),
       edges,
       settings: { light: lightTheme, dark: darkTheme }
     };
@@ -438,6 +526,7 @@ function FlowEditor() {
         const content = e.target?.result as string;
         const flow = JSON.parse(content);
         if (flow && flow.nodes && flow.edges) {
+          triggerSnapshot(true);
           setNodes(flow.nodes);
           setEdges(flow.edges);
         }
@@ -453,6 +542,24 @@ function FlowEditor() {
     reader.readAsText(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  const onNodeDragStart = useCallback(() => {
+    triggerSnapshot(true);
+  }, [triggerSnapshot]);
+
+  // Hook for Edge deletion
+  const handleDeleteEdge = useCallback((edgeId: string) => {
+    triggerSnapshot(true);
+    setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+  }, [setEdges, triggerSnapshot]);
+
+  // Pass handleDeleteEdge to edges
+  const edgesWithCallbacks = useMemo(() => {
+    return edges.map(edge => ({
+      ...edge,
+      data: { ...edge.data, onDelete: handleDeleteEdge }
+    }));
+  }, [edges, handleDeleteEdge]);
 
   return (
     <>
@@ -484,13 +591,14 @@ function FlowEditor() {
       <div className="w-full h-screen relative transition-colors custom-font-family" style={{ backgroundColor: 'var(--canvas-bg)' }} ref={reactFlowWrapper}>
         <ReactFlow
           nodes={nodesWithCallbacks}
-          edges={edges}
+          edges={edgesWithCallbacks}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
           onPaneClick={onPaneClick}
+          onNodeDragStart={onNodeDragStart}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           colorMode={isDarkMode ? 'dark' : 'light'}
@@ -532,9 +640,34 @@ function FlowEditor() {
             <hr className="my-1 border-gray-100 dark:border-gray-700" />
 
             <h3 className="font-bold text-sm mb-1 text-gray-700 dark:text-gray-200">Actions</h3>
-            <button onClick={() => onLayout('TB')} className="px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded text-sm hover:bg-gray-700 dark:hover:bg-gray-600 transition">Auto Layout Tree</button>
-            <button onClick={centerOnStart} className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition flex items-center justify-center gap-2">
+
+            <div className="flex gap-2">
+              <button
+                onClick={undo}
+                disabled={past.length === 0}
+                className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition flex justify-center items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Undo (Ctrl+Z)"
+              >
+                <Undo2 size={14} />
+              </button>
+              <button
+                onClick={redo}
+                disabled={future.length === 0}
+                className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition flex justify-center items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Redo (Ctrl+Shift+Z)"
+              >
+                <Redo2 size={14} />
+              </button>
+            </div>
+
+            <button onClick={() => onLayout('TB')} className="w-full px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded text-sm hover:bg-gray-700 dark:hover:bg-gray-600 transition">Auto Layout Tree</button>
+            <button onClick={centerOnStart} className="w-full px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition flex items-center justify-center gap-2">
               <LocateFixed size={14} /> Locate Start
+            </button>
+
+            <hr className="my-1 border-gray-100 dark:border-gray-700" />
+            <button onClick={startFromScratch} className="w-full px-3 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded text-sm hover:bg-red-100 dark:hover:bg-red-900/50 transition flex items-center justify-center gap-2 font-semibold">
+              <FilePlus size={14} /> New Flow
             </button>
 
             <div className="flex gap-2 mt-1">
