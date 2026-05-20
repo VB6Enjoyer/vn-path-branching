@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps, NodeResizer } from '@xyflow/react';
-import { Trash2, Image as ImageIcon, Check } from 'lucide-react';
+import { Trash2, Image as ImageIcon, Check, Pencil, X } from 'lucide-react';
 
 export function TextNode({ data, id, selected }: NodeProps) {
   const [content, setContent] = useState<string>((data.content as string) || 'Note or context...');
   const [mediaUrl, setMediaUrl] = useState<string>((data.mediaUrl as string) || '');
   const [showMediaInput, setShowMediaInput] = useState<boolean>(false);
+  const [isFullscreenPreview, setIsFullscreenPreview] = useState<boolean>(false);
 
   const updateContent = (value: string) => {
     setContent(value);
@@ -63,7 +65,7 @@ export function TextNode({ data, id, selected }: NodeProps) {
               className="hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
               title={mediaUrl ? "Edit Media URL" : "Add Image / YouTube URL"}
             >
-              <ImageIcon size={12} />
+              {mediaUrl ? <Pencil size={12} /> : <ImageIcon size={12} />}
             </button>
             <button
               onClick={handleDelete}
@@ -99,10 +101,10 @@ export function TextNode({ data, id, selected }: NodeProps) {
         )}
 
         {mediaUrl && (
-          <div className="w-full flex-1 min-h-0 flex items-center justify-center bg-black/5 dark:bg-black/20 mt-2 relative group/media">
+          <div className="w-full flex-1 min-h-0 flex items-center justify-center bg-black/5 dark:bg-black/20 mt-2 relative">
             {isYouTube(mediaUrl) ? (
               <iframe
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover nodrag"
                 src={`https://www.youtube.com/embed/${getYouTubeId(mediaUrl)}`}
                 title="YouTube video player"
                 frameBorder="0"
@@ -113,24 +115,14 @@ export function TextNode({ data, id, selected }: NodeProps) {
               <img
                 src={mediaUrl}
                 alt="Node media"
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain cursor-pointer"
+                title="Click to view full image"
+                onClick={() => setIsFullscreenPreview(true)}
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="gray" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
                   (e.target as HTMLImageElement).title = "Failed to load image";
                 }}
               />
-            )}
-
-            {/* Quick edit overlay when hovering directly over the media */}
-            {!showMediaInput && (
-              <button
-                onClick={() => setShowMediaInput(true)}
-                className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity backdrop-blur-sm"
-              >
-                <div className="flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-full text-xs font-semibold">
-                  <ImageIcon size={14} /> Edit Media URL
-                </div>
-              </button>
             )}
           </div>
         )}
@@ -148,6 +140,28 @@ export function TextNode({ data, id, selected }: NodeProps) {
 
         <Handle type="source" position={Position.Bottom} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100 hover:scale-110 transition-transform" style={{ backgroundColor: 'var(--note-color)' }} />
       </div>
+
+      {/* Lightbox Portal */}
+      {isFullscreenPreview && typeof document !== 'undefined' && createPortal(
+        <div
+           className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-8 backdrop-blur-sm cursor-pointer"
+           onClick={() => setIsFullscreenPreview(false)}
+        >
+           <button
+             className="absolute top-6 right-6 text-white hover:text-red-500 bg-black/50 p-2 rounded-full transition-colors"
+             onClick={(e) => { e.stopPropagation(); setIsFullscreenPreview(false); }}
+           >
+             <X size={24} />
+           </button>
+           <img
+              src={mediaUrl}
+              alt="Fullscreen media"
+              className="max-w-full max-h-full object-contain shadow-2xl rounded"
+              onClick={(e) => e.stopPropagation()} // Prevent clicking image from closing it immediately
+           />
+        </div>,
+        document.body
+      )}
     </>
   );
 }
