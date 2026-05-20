@@ -107,7 +107,15 @@ const getCleanNodes = (nodesToClean: Node[]) => {
     delete cleanData.onTypeChange;
     delete cleanData.onDelete;
     delete cleanData.onTextHiddenChange;
-    return { ...n, data: cleanData };
+    delete cleanData.onMediaUrlChange;
+
+    // Also remove measured property so it can cleanly re-import without flow size glitches
+    const cleanNode = { ...n, data: cleanData };
+    if (cleanNode.measured) {
+        delete cleanNode.measured;
+    }
+
+    return cleanNode;
   });
 };
 
@@ -204,7 +212,13 @@ function FlowEditor() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Avoid triggering when user is typing in inputs or textareas
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault(); // stop browser undo
         if (e.shiftKey) {
           redo();
         } else {
@@ -340,6 +354,7 @@ function FlowEditor() {
         data.onTextHiddenChange = (id: string, isTextHidden: boolean) => updateNodeData(id, { isTextHidden }, true);
       } else if (node.type === 'text') {
         data.onContentChange = (id: string, content: string) => updateNodeData(id, { content }, false);
+        data.onMediaUrlChange = (id: string, mediaUrl: string) => updateNodeData(id, { mediaUrl }, false);
       } else if (node.type === 'outcome') {
         data.onOutcomeChange = (id: string, outcome: string) => updateNodeData(id, { outcome }, false);
         data.onTypeChange = (id: string, type: string) => updateNodeData(id, { type }, true);
@@ -603,7 +618,7 @@ function FlowEditor() {
           edgeTypes={edgeTypes}
           colorMode={isDarkMode ? 'dark' : 'light'}
           fitView
-          className=""
+          className="transition-colors"
         >
           <Background gap={12} size={1} color={isDarkMode ? '#374151' : '#cbd5e1'} />
           <Controls className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" />

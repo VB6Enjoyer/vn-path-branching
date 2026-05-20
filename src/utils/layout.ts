@@ -9,9 +9,10 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
   dagreGraph.setGraph({ rankdir: direction, ranksep: 120, nodesep: 80 });
 
   nodes.forEach((node) => {
-    // We adjust sizes loosely based on node types
-    const width = node.type === 'decision' ? 260 : 200;
-    const height = node.type === 'decision' ? 200 : 150;
+    // If the node has been measured (rendered or resized), use its actual dimensions.
+    // Otherwise, fallback to initial default assumptions based on type.
+    const width = node.measured?.width || (node.type === 'decision' ? 260 : 200);
+    const height = node.measured?.height || (node.type === 'decision' ? 200 : 150);
     dagreGraph.setNode(node.id, { width, height });
   });
 

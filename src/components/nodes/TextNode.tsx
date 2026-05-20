@@ -1,14 +1,23 @@
 import React, { useState } from 'react';
-import { Handle, Position, NodeProps } from '@xyflow/react';
-import { Trash2 } from 'lucide-react';
+import { Handle, Position, NodeProps, NodeResizer } from '@xyflow/react';
+import { Trash2, Image as ImageIcon, X } from 'lucide-react';
 
-export function TextNode({ data, id }: NodeProps) {
+export function TextNode({ data, id, selected }: NodeProps) {
   const [content, setContent] = useState<string>((data.content as string) || 'Note or context...');
+  const [mediaUrl, setMediaUrl] = useState<string>((data.mediaUrl as string) || '');
+  const [showMediaInput, setShowMediaInput] = useState<boolean>(false);
 
   const updateContent = (value: string) => {
     setContent(value);
     if (typeof data.onContentChange === 'function') {
       data.onContentChange(id, value);
+    }
+  };
+
+  const updateMediaUrl = (value: string) => {
+    setMediaUrl(value);
+    if (typeof data.onMediaUrlChange === 'function') {
+      data.onMediaUrlChange(id, value);
     }
   };
 
@@ -20,33 +29,101 @@ export function TextNode({ data, id }: NodeProps) {
     }
   };
 
+  // YouTube URL parsing logic
+  const getYouTubeId = (url: string) => {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  };
+
+  const isYouTube = (url: string) => getYouTubeId(url) !== null;
+
   return (
-    <div className="border-2 rounded-lg shadow-lg w-48 group" style={{ borderColor: 'var(--note-color)', backgroundColor: 'var(--text-bg)' }}>
-      <Handle type="target" position={Position.Top} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100" style={{ backgroundColor: 'var(--note-color)' }} />
+    <>
+      <NodeResizer
+        color="var(--note-color)"
+        isVisible={selected}
+        minWidth={192} // w-48 equivalent roughly
+        minHeight={100}
+        keepAspectRatio={mediaUrl !== ''} // Lock ratio when media is present
+      />
+      <div className="border-2 rounded-lg shadow-lg group flex flex-col w-full h-full" style={{ borderColor: 'var(--note-color)', backgroundColor: 'var(--text-bg)' }}>
+        <Handle type="target" position={Position.Top} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100" style={{ backgroundColor: 'var(--note-color)' }} />
 
-      <div className="p-1.5 rounded-t-sm font-bold text-xs flex justify-between items-center" style={{ backgroundColor: 'var(--note-color)', color: 'var(--text-bg)' }}>
-        <span>Note / Event</span>
-        <button
-          onClick={handleDelete}
-          className="hover:text-red-300 hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Delete Node (Shift+Click to bypass confirm)"
-        >
-          <Trash2 size={12} />
-        </button>
+        <div className="p-1.5 rounded-t-sm font-bold text-xs flex justify-between items-center" style={{ backgroundColor: 'var(--note-color)', color: 'var(--text-bg)' }}>
+          <span>Note / Event</span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setShowMediaInput(!showMediaInput)}
+              className="hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Add Image / YouTube URL"
+            >
+              <ImageIcon size={12} />
+            </button>
+            <button
+              onClick={handleDelete}
+              className="hover:text-red-300 hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Delete Node (Shift+Click to bypass confirm)"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </div>
+
+        {showMediaInput && (
+          <div className="px-2 pt-2 pb-0 flex gap-1">
+            <input
+              type="text"
+              placeholder="Paste Image or YouTube URL..."
+              className="flex-1 text-xs p-1 border rounded nodrag focus:outline-none"
+              style={{ backgroundColor: 'var(--text-bg)', color: 'var(--text-color)', borderColor: 'var(--note-color)' }}
+              value={mediaUrl}
+              onChange={(e) => updateMediaUrl(e.target.value)}
+            />
+            <button onClick={() => setShowMediaInput(false)} className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 p-1 rounded transition-colors" title="Close input">
+               <X size={12} />
+            </button>
+          </div>
+        )}
+
+        {mediaUrl && (
+          <div className="w-full flex-1 min-h-0 flex items-center justify-center bg-black/5 dark:bg-black/20 mt-2">
+            {isYouTube(mediaUrl) ? (
+              <iframe
+                className="w-full h-full object-cover"
+                src={`https://www.youtube.com/embed/${getYouTubeId(mediaUrl)}`}
+                title="YouTube video player"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              ></iframe>
+            ) : (
+              <img
+                src={mediaUrl}
+                alt="Node media"
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="gray" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
+                  (e.target as HTMLImageElement).title = "Failed to load image";
+                }}
+              />
+            )}
+          </div>
+        )}
+
+        <div className="p-2 w-full flex-none">
+          <textarea
+            className="w-full h-full text-sm p-2 bg-transparent border-none focus:ring-0 resize-none nodrag"
+            style={{ color: 'var(--text-color)' }}
+            rows={mediaUrl ? 2 : 3}
+            value={content}
+            onChange={(e) => updateContent(e.target.value)}
+            placeholder="Enter text..."
+          />
+        </div>
+
+        <Handle type="source" position={Position.Bottom} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100 hover:scale-110 transition-transform" style={{ backgroundColor: 'var(--note-color)' }} />
       </div>
-
-      <div className="p-2">
-        <textarea
-          className="w-full text-sm p-2 bg-transparent border-none focus:ring-0 resize-none nodrag"
-          style={{ color: 'var(--text-color)' }}
-          rows={3}
-          value={content}
-          onChange={(e) => updateContent(e.target.value)}
-          placeholder="Enter text..."
-        />
-      </div>
-
-      <Handle type="source" position={Position.Bottom} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100 hover:scale-110 transition-transform" style={{ backgroundColor: 'var(--note-color)' }} />
-    </div>
+    </>
   );
 }
