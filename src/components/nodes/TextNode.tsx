@@ -12,9 +12,9 @@ export function TextNode({ data, id, selected }: NodeProps) {
 
   // Sync state from parent data changes
   useEffect(() => {
-    if (typeof data.content === 'string') setTimeout(() => setContent(data.content), 0);
-    if (typeof data.mediaUrl === 'string') setTimeout(() => setMediaUrl(data.mediaUrl), 0);
-    if (typeof data.isTextHidden === 'boolean') setTimeout(() => setIsTextHidden(data.isTextHidden), 0);
+    if (typeof data.content === 'string') setTimeout(() => setContent(data.content as string), 0);
+    if (typeof data.mediaUrl === 'string') setTimeout(() => setMediaUrl(data.mediaUrl as string), 0);
+    if (typeof data.isTextHidden === 'boolean') setTimeout(() => setIsTextHidden(data.isTextHidden as boolean), 0);
   }, [data.content, data.mediaUrl, data.isTextHidden]);
 
   const updateContent = (value: string) => {

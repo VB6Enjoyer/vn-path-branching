@@ -8,8 +8,8 @@ export function OutcomeNode({ data, id }: NodeProps) {
 
   // Sync state from parent data changes
   useEffect(() => {
-    if (typeof data.outcome === 'string') setTimeout(() => setOutcome(data.outcome), 0);
-    if (typeof data.type === 'string') setTimeout(() => setType(data.type), 0);
+    if (typeof data.outcome === 'string') setTimeout(() => setOutcome(data.outcome as string), 0);
+    if (typeof data.type === 'string') setTimeout(() => setType(data.type as string), 0);
   }, [data.outcome, data.type]);
 
   const updateOutcome = (value: string) => {

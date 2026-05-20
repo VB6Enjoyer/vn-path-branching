@@ -46,7 +46,6 @@ const initialNodes: Node[] = [
 
 const initialEdges: Edge[] = [];
 
-// Popular Google Fonts for the datalist
 const popularFonts = [
   "Inter", "Roboto", "Open Sans", "Lato", "Montserrat", "Poppins",
   "Source Sans Pro", "Oswald", "Raleway", "Playfair Display", "Merriweather"
@@ -96,7 +95,6 @@ const SettingRow = ({
   );
 };
 
-// Clean nodes helper (strips callbacks)
 const getCleanNodes = (nodesToClean: Node[]) => {
   return nodesToClean.map(n => {
     const cleanData = { ...n.data };
@@ -142,7 +140,6 @@ function FlowEditor() {
 
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Extended Context Menu State
   type MenuState = {
     show: boolean;
     x: number;
@@ -156,7 +153,6 @@ function FlowEditor() {
 
   const isConnectingRef = useRef(false);
 
-  // Undo / Redo state
   const [past, setPast] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
   const [future, setFuture] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
 
@@ -315,11 +311,13 @@ function FlowEditor() {
     }
   };
 
+  // This useCallback dependency array needs to be correct to ensure it uses the freshest nodes state
   const updateNodeData = useCallback((nodeId: string, newData: Record<string, unknown>, immediateSnapshot: boolean = false) => {
     triggerSnapshot(immediateSnapshot);
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === nodeId) {
+          // It's vital we don't accidentally wipe out non-updated data
           return { ...node, data: { ...node.data, ...newData } };
         }
         return node;
@@ -450,7 +448,7 @@ function FlowEditor() {
 
   const onPaneContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent) => {
-      if (event.shiftKey) return; // allow native context menu
+      if (event.shiftKey) return;
       event.preventDefault();
 
       if (reactFlowWrapper.current) {
@@ -468,7 +466,7 @@ function FlowEditor() {
 
   const onNodeContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent, node: Node) => {
-      if (event.shiftKey) return; // allow native context menu
+      if (event.shiftKey) return;
       event.preventDefault();
 
       if (reactFlowWrapper.current) {
@@ -560,14 +558,22 @@ function FlowEditor() {
     switch (action) {
       case 'add_choice':
         if (node.type === 'decision') {
-          const currentChoices = (node.data.choices as string[]) || [];
-          const newChoices = [...currentChoices, `Choice ${currentChoices.length + 1}`];
-          updateNodeData(id, { choices: newChoices }, true);
+          // When creating a new choice, we must explicitly lookup the FRESH node from the 'nodes' array,
+          // because the node in menu.targetNode is a stale snapshot from the exact moment they right-clicked.
+          const freshNode = nodes.find(n => n.id === id);
+          if (freshNode) {
+             const currentChoices = (freshNode.data.choices as string[]) || [];
+             const newChoices = [...currentChoices, `Choice ${currentChoices.length + 1}`];
+             updateNodeData(id, { choices: newChoices }, true);
+          }
         }
         break;
       case 'toggle_text':
-        const isHidden = !!node.data.isTextHidden;
-        updateNodeData(id, { isTextHidden: !isHidden }, true);
+        const freshNodeForText = nodes.find(n => n.id === id);
+        if (freshNodeForText) {
+          const isHidden = !!freshNodeForText.data.isTextHidden;
+          updateNodeData(id, { isTextHidden: !isHidden }, true);
+        }
         break;
       case 'delete':
         deleteNode(id);

@@ -10,8 +10,8 @@ export function DecisionNode({ data, id }: NodeProps) {
   // Sync state from parent data changes (e.g. from context menu or undo/redo)
   useEffect(() => {
     if (Array.isArray(data.choices)) setTimeout(() => setChoices(data.choices as string[]), 0);
-    if (typeof data.prompt === 'string') setTimeout(() => setPrompt(data.prompt), 0);
-    if (typeof data.isTextHidden === 'boolean') setTimeout(() => setIsTextHidden(data.isTextHidden), 0);
+    if (typeof data.prompt === 'string') setTimeout(() => setPrompt(data.prompt as string), 0);
+    if (typeof data.isTextHidden === 'boolean') setTimeout(() => setIsTextHidden(data.isTextHidden as boolean), 0);
   }, [data.choices, data.prompt, data.isTextHidden]);
 
   const [hoveredHandleIndex, setHoveredHandleIndex] = useState<number | null>(null);
