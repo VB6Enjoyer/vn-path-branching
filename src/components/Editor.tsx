@@ -355,6 +355,7 @@ function FlowEditor() {
       } else if (node.type === 'text') {
         data.onContentChange = (id: string, content: string) => updateNodeData(id, { content }, false);
         data.onMediaUrlChange = (id: string, mediaUrl: string) => updateNodeData(id, { mediaUrl }, false);
+        data.onTextHiddenChange = (id: string, isTextHidden: boolean) => updateNodeData(id, { isTextHidden }, true);
       } else if (node.type === 'outcome') {
         data.onOutcomeChange = (id: string, outcome: string) => updateNodeData(id, { outcome }, false);
         data.onTypeChange = (id: string, type: string) => updateNodeData(id, { type }, true);
@@ -618,7 +619,7 @@ function FlowEditor() {
           edgeTypes={edgeTypes}
           colorMode={isDarkMode ? 'dark' : 'light'}
           fitView
-          className="transition-colors"
+          className=""
         >
           <Background gap={12} size={1} color={isDarkMode ? '#374151' : '#cbd5e1'} />
           <Controls className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" />

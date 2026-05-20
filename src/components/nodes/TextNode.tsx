@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps, NodeResizer } from '@xyflow/react';
-import { Trash2, Image as ImageIcon, Check, Pencil, X } from 'lucide-react';
+import { Trash2, Image as ImageIcon, Check, Pencil, X, Eye, EyeOff } from 'lucide-react';
 
 export function TextNode({ data, id, selected }: NodeProps) {
   const [content, setContent] = useState<string>((data.content as string) || 'Note or context...');
   const [mediaUrl, setMediaUrl] = useState<string>((data.mediaUrl as string) || '');
   const [showMediaInput, setShowMediaInput] = useState<boolean>(false);
   const [isFullscreenPreview, setIsFullscreenPreview] = useState<boolean>(false);
+  const [isTextHidden, setIsTextHidden] = useState<boolean>((data.isTextHidden as boolean) || false);
 
   const updateContent = (value: string) => {
     setContent(value);
@@ -20,6 +21,21 @@ export function TextNode({ data, id, selected }: NodeProps) {
     setMediaUrl(value);
     if (typeof data.onMediaUrlChange === 'function') {
       data.onMediaUrlChange(id, value);
+    }
+    // Auto unhide text if media is removed and text is currently hidden
+    if (value === '' && isTextHidden) {
+       setIsTextHidden(false);
+       if (typeof data.onTextHiddenChange === 'function') {
+         data.onTextHiddenChange(id, false);
+       }
+    }
+  };
+
+  const toggleTextHidden = () => {
+    const newState = !isTextHidden;
+    setIsTextHidden(newState);
+    if (typeof data.onTextHiddenChange === 'function') {
+      data.onTextHiddenChange(id, newState);
     }
   };
 
@@ -60,6 +76,15 @@ export function TextNode({ data, id, selected }: NodeProps) {
         <div className="p-1.5 rounded-t-sm font-bold text-xs flex justify-between items-center" style={{ backgroundColor: 'var(--note-color)', color: 'var(--text-bg)' }}>
           <span>Note / Event</span>
           <div className="flex gap-1">
+            {mediaUrl && (
+              <button
+                onClick={toggleTextHidden}
+                className="hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Toggle Text Box"
+              >
+                {isTextHidden ? <EyeOff size={12} /> : <Eye size={12} />}
+              </button>
+            )}
             <button
               onClick={() => setShowMediaInput(!showMediaInput)}
               className="hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
@@ -127,16 +152,18 @@ export function TextNode({ data, id, selected }: NodeProps) {
           </div>
         )}
 
-        <div className="p-2 w-full flex-none">
-          <textarea
-            className="w-full h-full text-sm p-2 bg-transparent border-none focus:ring-0 resize-none nodrag"
-            style={{ color: 'var(--text-color)' }}
-            rows={mediaUrl ? 2 : 3}
-            value={content}
-            onChange={(e) => updateContent(e.target.value)}
-            placeholder="Enter text..."
-          />
-        </div>
+        {!isTextHidden && (
+          <div className="p-2 w-full flex-none">
+            <textarea
+              className="w-full h-full text-sm p-2 bg-transparent border-none focus:ring-0 resize-none nodrag"
+              style={{ color: 'var(--text-color)' }}
+              rows={mediaUrl ? 2 : 3}
+              value={content}
+              onChange={(e) => updateContent(e.target.value)}
+              placeholder="Enter text..."
+            />
+          </div>
+        )}
 
         <Handle type="source" position={Position.Bottom} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100 hover:scale-110 transition-transform" style={{ backgroundColor: 'var(--note-color)' }} />
       </div>
@@ -157,7 +184,7 @@ export function TextNode({ data, id, selected }: NodeProps) {
               src={mediaUrl}
               alt="Fullscreen media"
               className="max-w-full max-h-full object-contain shadow-2xl rounded"
-              onClick={(e) => e.stopPropagation()} // Prevent clicking image from closing it immediately
+              onClick={(e) => e.stopPropagation()}
            />
         </div>,
         document.body
