@@ -46,7 +46,6 @@ const initialNodes: Node[] = [
 
 const initialEdges: Edge[] = [];
 
-// Popular Google Fonts for the datalist
 const popularFonts = [
   "Inter", "Roboto", "Open Sans", "Lato", "Montserrat", "Poppins",
   "Source Sans Pro", "Oswald", "Raleway", "Playfair Display", "Merriweather"
@@ -107,7 +106,7 @@ const getCleanNodes = (nodesToClean: Node[]) => {
     delete cleanData.onDelete;
     delete cleanData.onTextHiddenChange;
     delete cleanData.onMediaUrlChange;
-    delete cleanData.isHighlighted; // Don't persist highlight state
+    delete cleanData.isHighlighted;
 
     const cleanNode = { ...n, data: cleanData };
     if (cleanNode.measured) {
@@ -158,7 +157,6 @@ function FlowEditor() {
   const [past, setPast] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
   const [future, setFuture] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
 
-  // Track currently highlighted target node for pathfinding
   const [highlightedTargetId, setHighlightedTargetId] = useState<string | null>(null);
 
   const takeSnapshot = useCallback(() => {
@@ -338,7 +336,6 @@ function FlowEditor() {
     if (highlightedTargetId === nodeId) setHighlightedTargetId(null);
   }, [setNodes, setEdges, triggerSnapshot, highlightedTargetId]);
 
-  // Pathfinding logic: compute all ancestor nodes and edges given a target node ID
   const { highlightedNodeIds, highlightedEdgeIds } = useMemo(() => {
     const nodeSet = new Set<string>();
     const edgeSet = new Set<string>();
@@ -350,7 +347,6 @@ function FlowEditor() {
 
     while (queue.length > 0) {
       const current = queue.shift()!;
-      // Find all edges that target the current node
       edges.forEach(edge => {
         if (edge.target === current) {
           edgeSet.add(edge.id);
@@ -521,7 +517,7 @@ function FlowEditor() {
   const onPaneClick = useCallback(() => {
     if (isConnectingRef.current) return;
     setMenu(prev => ({ ...prev, show: false }));
-    setHighlightedTargetId(null); // Clear highlight on pane click
+    setHighlightedTargetId(null);
   }, []);
 
   const onLayout = useCallback(
@@ -747,6 +743,18 @@ function FlowEditor() {
             style={{ backgroundColor: isDarkMode ? '#1f2937' : '#ffffff' }}
           />
 
+          {/* Decorative Logo Overlay */}
+          {activeTheme.logoUrl && (
+             <Panel position="top-left" className="pointer-events-none opacity-90 m-6">
+                <img
+                  src={activeTheme.logoUrl}
+                  alt="VN Logo"
+                  className="max-h-32 object-contain drop-shadow-xl"
+                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                />
+             </Panel>
+          )}
+
           <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 flex flex-col gap-2 w-48 transition-colors">
             <div className="flex justify-between items-center mb-1">
               <h3 className="font-bold text-sm text-gray-700 dark:text-gray-200">Add Nodes</h3>
@@ -816,13 +824,14 @@ function FlowEditor() {
           </Panel>
 
           {showSettings && (
-            <Panel position="top-left" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-64 max-h-[80vh] overflow-y-auto">
+            <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-64 max-h-[80vh] overflow-y-auto mt-2" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
               <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100">Visual Settings ({isDarkMode ? 'Dark' : 'Light'})</h3>
                 <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
               </div>
 
               <div className="flex flex-col gap-1">
+                <SettingRow label="Logo URL" settingKey="logoUrl" type="text" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Google Font" settingKey="fontFamily" type="text" list="fonts" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <datalist id="fonts">
                   {popularFonts.map(f => <option key={f} value={f} />)}

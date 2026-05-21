@@ -9,6 +9,7 @@ export interface ThemeSettings {
   outcomeBadColor: string;
   outcomeNeutralColor: string;
   pathHighlightColor: string;
+  logoUrl: string;
 }
 
 export const defaultLightTheme: ThemeSettings = {
@@ -22,6 +23,7 @@ export const defaultLightTheme: ThemeSettings = {
   outcomeBadColor: '#ef4444', // red-500
   outcomeNeutralColor: '#a855f7', // purple-500
   pathHighlightColor: '#06b6d4', // cyan-500
+  logoUrl: '',
 };
 
 export const defaultDarkTheme: ThemeSettings = {
@@ -35,4 +37,5 @@ export const defaultDarkTheme: ThemeSettings = {
   outcomeBadColor: '#dc2626', // red-600
   outcomeNeutralColor: '#9333ea', // purple-600
   pathHighlightColor: '#22d3ee', // cyan-400
+  logoUrl: '',
 };
