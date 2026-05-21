@@ -612,6 +612,9 @@ function FlowEditor() {
       case 'highlight_path':
         setHighlightedTargetId(id);
         break;
+      case 'clear_highlight':
+        setHighlightedTargetId(null);
+        break;
       case 'delete':
         deleteNode(id);
         break;
@@ -882,9 +885,15 @@ function FlowEditor() {
                   </button>
                 )}
 
-                <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('highlight_path')}>
-                  <Waypoints size={14} /> Show Path to Node
-                </button>
+                {highlightedTargetId ? (
+                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('clear_highlight')}>
+                    <Waypoints size={14} /> Hide Path
+                  </button>
+                ) : (
+                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('highlight_path')}>
+                    <Waypoints size={14} /> Show Path to Node
+                  </button>
+                )}
 
                 <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => handleMenuNodeAction('delete')}>
                   <Trash2 size={14} /> Delete Node
