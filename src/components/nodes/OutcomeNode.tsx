@@ -33,7 +33,11 @@ export function OutcomeNode({ data, id }: NodeProps) {
     }
   };
 
+  const isHighlighted = !!data.isHighlighted;
+  const isBlurred = !!data.isBlurred;
+
   const getColor = () => {
+    if (isBlurred) return 'var(--outcome-neutral-color)'; // Neutralize while spoilered
     switch(type) {
       case 'good': return 'var(--outcome-good-color)';
       case 'bad': return 'var(--outcome-bad-color)';
@@ -41,11 +45,9 @@ export function OutcomeNode({ data, id }: NodeProps) {
     }
   };
 
-  const isHighlighted = !!data.isHighlighted;
   const color = getColor();
   const borderColor = isHighlighted ? 'var(--path-highlight-color)' : color;
   const boxShadow = isHighlighted ? '0 0 15px var(--path-highlight-color)' : undefined;
-  const isBlurred = !!data.isBlurred;
 
   return (
     <div className={`border-2 rounded-lg shadow-lg w-48 group transition-all ${isBlurred ? 'blur-[8px] hover:blur-[4px] cursor-pointer' : ''}`} style={{ borderColor, backgroundColor: 'var(--text-bg)', boxShadow, pointerEvents: isBlurred ? 'none' : 'auto' }}>

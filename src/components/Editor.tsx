@@ -689,15 +689,20 @@ function FlowEditor() {
   }, [setEdges, triggerSnapshot]);
 
   const edgesWithCallbacks = useMemo(() => {
-    return edges.map(edge => ({
-      ...edge,
-      data: {
-        ...edge.data,
-        onDelete: handleDeleteEdge,
-        isHighlighted: highlightedEdgeIds.has(edge.id)
-      }
-    }));
-  }, [edges, handleDeleteEdge, highlightedEdgeIds]);
+    return edges.map(edge => {
+      // Blur the edge if spoiler mode is on, and its source node hasn't been revealed yet.
+      const isBlurred = isSpoilerMode && edge.source !== 'start' && !revealedNodeIds.has(edge.source);
+      return {
+        ...edge,
+        data: {
+          ...edge.data,
+          onDelete: handleDeleteEdge,
+          isHighlighted: highlightedEdgeIds.has(edge.id),
+          isBlurred
+        }
+      };
+    });
+  }, [edges, handleDeleteEdge, highlightedEdgeIds, isSpoilerMode, revealedNodeIds]);
 
   return (
     <>

@@ -67,9 +67,9 @@ export function TextNode({ data, id, selected }: NodeProps) {
   const isYouTube = (url: string) => getYouTubeId(url) !== null;
 
   const isHighlighted = !!data.isHighlighted;
+  const isBlurred = !!data.isBlurred;
   const borderColor = isHighlighted ? 'var(--path-highlight-color)' : 'var(--note-color)';
   const boxShadow = isHighlighted ? '0 0 15px var(--path-highlight-color)' : undefined;
-  const isBlurred = !!data.isBlurred;
 
   return (
     <>
@@ -114,7 +114,7 @@ export function TextNode({ data, id, selected }: NodeProps) {
           </div>
         </div>
 
-        {showMediaInput && (
+        {showMediaInput && !isBlurred && (
           <div className="px-2 pt-2 pb-0 flex gap-1 items-center">
             <input
               type="text"
@@ -138,28 +138,30 @@ export function TextNode({ data, id, selected }: NodeProps) {
         )}
 
         {mediaUrl && (
-          <div className="w-full flex-1 min-h-0 flex items-center justify-center bg-black/5 dark:bg-black/20 mt-2 relative">
-            {isYouTube(mediaUrl) ? (
-              <iframe
-                className="w-full h-full object-cover nodrag"
-                src={`https://www.youtube.com/embed/${getYouTubeId(mediaUrl)}`}
-                title="YouTube video player"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
-            ) : (
-              <img
-                src={mediaUrl}
-                alt="Node media"
-                className="w-full h-full object-contain cursor-pointer"
-                title="Click to view full image"
-                onClick={() => setIsFullscreenPreview(true)}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="gray" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
-                  (e.target as HTMLImageElement).title = "Failed to load image";
-                }}
-              />
+          <div className={`w-full flex-1 min-h-0 flex items-center justify-center bg-black/5 dark:bg-black/20 mt-2 relative ${isBlurred ? 'opacity-0' : ''}`}>
+            {!isBlurred && (
+              isYouTube(mediaUrl) ? (
+                <iframe
+                  className="w-full h-full object-cover nodrag"
+                  src={`https://www.youtube.com/embed/${getYouTubeId(mediaUrl)}`}
+                  title="YouTube video player"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              ) : (
+                <img
+                  src={mediaUrl}
+                  alt="Node media"
+                  className="w-full h-full object-contain cursor-pointer"
+                  title="Click to view full image"
+                  onClick={() => setIsFullscreenPreview(true)}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="gray" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
+                    (e.target as HTMLImageElement).title = "Failed to load image";
+                  }}
+                />
+              )
             )}
           </div>
         )}
@@ -180,7 +182,7 @@ export function TextNode({ data, id, selected }: NodeProps) {
         <Handle type="source" position={Position.Bottom} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100 hover:scale-110 transition-transform" style={{ backgroundColor: 'var(--note-color)' }} />
       </div>
 
-      {isFullscreenPreview && typeof document !== 'undefined' && createPortal(
+      {isFullscreenPreview && !isBlurred && typeof document !== 'undefined' && createPortal(
         <div
            className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-8 backdrop-blur-sm cursor-pointer"
            onClick={() => setIsFullscreenPreview(false)}
