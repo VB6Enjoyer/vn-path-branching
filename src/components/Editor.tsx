@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed } from 'lucide-react';
 import debounce from 'lodash.debounce';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge } from './nodes';
@@ -158,6 +158,10 @@ function FlowEditor() {
   const [future, setFuture] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
 
   const [highlightedTargetId, setHighlightedTargetId] = useState<string | null>(null);
+
+  // Spoiler Mode State
+  const [isSpoilerMode, setIsSpoilerMode] = useState(false);
+  const [revealedNodeIds, setRevealedNodeIds] = useState<Set<string>>(new Set());
 
   const takeSnapshot = useCallback(() => {
     setPast((prev) => {
@@ -364,7 +368,8 @@ function FlowEditor() {
   const nodesWithCallbacks = useMemo(() => {
     return nodes.map(node => {
       const isHighlighted = highlightedNodeIds.has(node.id);
-      const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode, isHighlighted };
+      const isBlurred = isSpoilerMode && node.id !== 'start' && !revealedNodeIds.has(node.id);
+      const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode, isHighlighted, isBlurred };
 
       if (node.type === 'decision') {
         data.onChoicesChange = (id: string, choices: string[]) => {
@@ -395,7 +400,7 @@ function FlowEditor() {
 
       return { ...node, data };
     });
-  }, [nodes, updateNodeData, deleteNode, setEdges, highlightedNodeIds]);
+  }, [nodes, updateNodeData, deleteNode, setEdges, highlightedNodeIds, isSpoilerMode, revealedNodeIds]);
 
   const onConnectStart = useCallback(() => {
     isConnectingRef.current = true;
@@ -668,6 +673,12 @@ function FlowEditor() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    if (isSpoilerMode && node.id !== 'start' && !revealedNodeIds.has(node.id)) {
+      setRevealedNodeIds(prev => new Set([...prev, node.id]));
+    }
+  }, [isSpoilerMode, revealedNodeIds]);
+
   const onNodeDragStart = useCallback(() => {
     triggerSnapshot(true);
   }, [triggerSnapshot]);
@@ -728,6 +739,7 @@ function FlowEditor() {
           onPaneClick={onPaneClick}
           onPaneContextMenu={onPaneContextMenu}
           onNodeContextMenu={onNodeContextMenu}
+          onNodeClick={onNodeClick}
           onNodeDragStart={onNodeDragStart}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
@@ -765,6 +777,16 @@ function FlowEditor() {
                   title="Visual Settings"
                 >
                   <Settings size={14} />
+                </button>
+                <button
+                  onClick={() => {
+                     setIsSpoilerMode(!isSpoilerMode);
+                     if (isSpoilerMode) setRevealedNodeIds(new Set()); // Reset on disable
+                  }}
+                  className={`p-1 rounded-full transition ${isSpoilerMode ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
+                  title="Toggle Spoiler Mode"
+                >
+                  <EyeClosed size={14} />
                 </button>
                 <button
                   onClick={toggleTheme}

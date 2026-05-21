@@ -69,17 +69,20 @@ export function TextNode({ data, id, selected }: NodeProps) {
   const isHighlighted = !!data.isHighlighted;
   const borderColor = isHighlighted ? 'var(--path-highlight-color)' : 'var(--note-color)';
   const boxShadow = isHighlighted ? '0 0 15px var(--path-highlight-color)' : undefined;
+  const isBlurred = !!data.isBlurred;
 
   return (
     <>
-      <NodeResizer
-        color={borderColor}
-        isVisible={selected}
-        minWidth={192}
-        minHeight={100}
-        keepAspectRatio={mediaUrl !== ''}
-      />
-      <div className="border-2 rounded-lg shadow-lg group flex flex-col w-full h-full transition-all" style={{ borderColor, backgroundColor: 'var(--text-bg)', boxShadow }}>
+      {!isBlurred && (
+         <NodeResizer
+           color={borderColor}
+           isVisible={selected}
+           minWidth={192}
+           minHeight={100}
+           keepAspectRatio={mediaUrl !== ''}
+         />
+      )}
+      <div className={`border-2 rounded-lg shadow-lg group flex flex-col w-full h-full transition-all ${isBlurred ? 'blur-[8px] hover:blur-[4px] cursor-pointer' : ''}`} style={{ borderColor, backgroundColor: 'var(--text-bg)', boxShadow, pointerEvents: isBlurred ? 'none' : 'auto' }}>
         <Handle type="target" position={Position.Top} className="w-5 h-5 border-2 border-gray-900 dark:border-gray-100" style={{ backgroundColor: 'var(--note-color)' }} />
 
         <div className="p-1.5 rounded-t-sm font-bold text-xs flex justify-between items-center transition-colors" style={{ backgroundColor: borderColor, color: 'var(--text-bg)' }}>
