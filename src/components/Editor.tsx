@@ -869,6 +869,11 @@ function FlowEditor() {
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('decision', menu.x, menu.y, menu.connectionParams)}>Decision Node</button>
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('text', menu.x, menu.y, menu.connectionParams)}>Note / Event Node</button>
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('outcome', menu.x, menu.y, menu.connectionParams)}>Outcome Node</button>
+                {highlightedTargetId && (
+                   <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => { setHighlightedTargetId(null); setMenu(prev => ({...prev, show: false})); }}>
+                     <Waypoints size={14} /> Hide Path
+                   </button>
+                )}
               </>
             ) : (
               <>
@@ -885,7 +890,7 @@ function FlowEditor() {
                   </button>
                 )}
 
-                {highlightedTargetId ? (
+                {highlightedTargetId === menu.targetNode?.id ? (
                   <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('clear_highlight')}>
                     <Waypoints size={14} /> Hide Path
                   </button>
