@@ -1,10 +1,14 @@
-1. Look at `OutcomeNode.tsx`: the data structure uses `data.outcome` (for text) and `data.type` (for 'good'/'bad'/'neutral').
-2. Look at `Editor.tsx`: the Endings Directory uses `node.data.label` (which is undefined/wrong) and `node.data.outcomeType` (which is also wrong, it should be `node.data.type`). Also, when initially creating the node, `addNode` creates it with `data: { label: 'New Outcome', outcomeType: 'neutral' }`.
-3. Fix `Editor.tsx`:
-   - Change `addNode` to populate `data: { outcome: 'Ending Name', type: 'neutral' }` when `type === 'outcome'`.
-   - Change `handleAddNode` (the context menu creator) to do the same.
-   - In the Endings Directory map:
-     `const outcomeType = node.data.type as 'good' | 'bad' | 'neutral' || 'neutral';`
-     `const outcomeText = node.data.outcome as string;`
-     `const displayName = outcomeText ? outcomeText : (outcomeType === 'good' ? 'Good Ending' : (outcomeType === 'bad' ? 'Bad Ending' : 'Neutral Ending'));`
-     Display `displayName`.
+1. We need to implement a modal to browse pre-existing flows.
+2. Since Next.js `public` directory doesn't have an API to list files client-side, we need an API route.
+   - Create `src/app/api/flows/route.ts` to scan `public/flows` or `flows` directory and return a list of available JSON files with basic parsed metadata.
+3. Flow JSON metadata updates:
+   - Export logic currently saves nodes, edges, activeTheme. We should add `title`, `author`, `timestamp`.
+   - Update `Editor.tsx` settings panel to include inputs for `Flow Title` and `Flow Author`.
+   - Update the export logic to embed these in the JSON.
+4. Implement the "Load Flow" modal:
+   - A button in the toolbar (maybe next to the 'Import' button) that says "Browse Flows".
+   - It fetches from `/api/flows`.
+   - Displays a modal with a CSS grid (3 columns).
+   - Shows image placeholder (or uses theme background color), Title, Author, Timestamp, Node Count.
+   - Provides filtering/sorting controls.
+   - Clicking a flow fetches the raw JSON and loads it into the editor.
