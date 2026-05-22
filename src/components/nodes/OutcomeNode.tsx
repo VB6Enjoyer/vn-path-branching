@@ -3,7 +3,7 @@ import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Trash2 } from 'lucide-react';
 
 export function OutcomeNode({ data, id }: NodeProps) {
-  const [outcome, setOutcome] = useState<string>((data.outcome as string) || 'Ending Name');
+  const [outcome, setOutcome] = useState<string>((data.outcome as string) || '');
   const [type, setType] = useState<string>((data.type as string) || 'neutral');
 
   useEffect(() => {

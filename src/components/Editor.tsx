@@ -871,7 +871,7 @@ function FlowEditor() {
                   <p className="text-xs text-gray-500 dark:text-gray-400 italic text-center py-4">No endings found.</p>
                 ) : (
                   nodes.filter(n => n.type === 'outcome').map((node) => {
-                    const outcomeType = node.data.outcomeType as 'good' | 'bad' | 'neutral' || 'neutral';
+                    const outcomeType = node.data.type as 'good' | 'bad' | 'neutral' || 'neutral';
                     const isRevealed = revealedNodeIds.has(node.id);
                     const isBlurred = isSpoilerMode && !isRevealed;
 
@@ -881,11 +881,19 @@ function FlowEditor() {
                       if (outcomeType === 'bad') bgClass = 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
                     }
 
+                    const outcomeText = node.data.outcome as string;
+                    let displayName = outcomeText;
+                    if (!displayName || displayName === 'Ending Name') {
+                      if (outcomeType === 'good') displayName = 'Good Ending';
+                      else if (outcomeType === 'bad') displayName = 'Bad Ending';
+                      else displayName = 'Neutral Ending';
+                    }
+
                     return (
                       <div key={node.id} className={`flex flex-col gap-2 p-2 rounded border ${bgClass}`}>
                         <div className="flex items-center justify-between">
                            <span className={`text-sm font-semibold truncate flex-1 ${isBlurred ? 'blur-sm select-none' : ''}`}>
-                             {node.data.label as string || 'Unnamed Outcome'}
+                             {displayName}
                            </span>
                            {!isBlurred && (
                              <span className="text-[10px] uppercase font-bold opacity-60 ml-2 tracking-wider">

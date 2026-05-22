@@ -1,7 +1,10 @@
-1. Implement a new state `showEndings` to toggle an endings tab.
-2. Filter the `nodes` array for nodes of type `outcome` to get the list of endings.
-3. Add a new button in the `top-right` toolbar Panel next to the Visual Settings button to toggle the Endings tab.
-4. Render a new `<Panel position="top-right">` (positioned correctly next to the existing panels) when `showEndings` is true.
-   - It will list all `outcome` nodes.
-   - Each ending will have a button or click-handler to trigger `setHighlightedTargetId(node.id)` to highlight the path to it.
-   - Also, clicking the ending should ideally pan the view to that node (we can use `useReactFlow().fitView` or `setCenter`).
+1. Look at `OutcomeNode.tsx`: the data structure uses `data.outcome` (for text) and `data.type` (for 'good'/'bad'/'neutral').
+2. Look at `Editor.tsx`: the Endings Directory uses `node.data.label` (which is undefined/wrong) and `node.data.outcomeType` (which is also wrong, it should be `node.data.type`). Also, when initially creating the node, `addNode` creates it with `data: { label: 'New Outcome', outcomeType: 'neutral' }`.
+3. Fix `Editor.tsx`:
+   - Change `addNode` to populate `data: { outcome: 'Ending Name', type: 'neutral' }` when `type === 'outcome'`.
+   - Change `handleAddNode` (the context menu creator) to do the same.
+   - In the Endings Directory map:
+     `const outcomeType = node.data.type as 'good' | 'bad' | 'neutral' || 'neutral';`
+     `const outcomeText = node.data.outcome as string;`
+     `const displayName = outcomeText ? outcomeText : (outcomeType === 'good' ? 'Good Ending' : (outcomeType === 'bad' ? 'Bad Ending' : 'Neutral Ending'));`
+     Display `displayName`.
