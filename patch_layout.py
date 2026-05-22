@@ -1,7 +1,9 @@
-import dagre from 'dagre';
-import { Node, Edge, Position } from '@xyflow/react';
+with open('src/utils/layout.ts', 'r') as f:
+    content = f.read()
 
-export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
+# Filter out image nodes from layout algorithm entirely
+# We only pass non-image nodes to dagre
+replacement = """export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
   const isHorizontal = direction === 'LR';
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -57,4 +59,10 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
   const newNodes = [...newLayoutNodes, ...ignoredNodes];
 
   return { nodes: newNodes, edges };
-};
+};"""
+
+import re
+content = re.sub(r'export const getLayoutedElements = \([\s\S]+?\};\n\};', replacement, content)
+
+with open('src/utils/layout.ts', 'w') as f:
+    f.write(content)

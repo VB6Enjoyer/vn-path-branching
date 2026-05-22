@@ -1,0 +1,9 @@
+1. Create a `DecorativeImageNode.tsx` inside `src/components/nodes/`.
+  - It will act purely as an image without input or output handles (or hidden handles to let it be part of the flow). Wait, since it's meant to be decorative and placed freely, maybe it shouldn't have handles at all. In `@xyflow/react`, a node without `Handle`s cannot be connected, which is perfect for decorations!
+  - We can use `NodeResizer` so the user can scale the image.
+  - State: `mediaUrl`, just like the image support in `TextNode`.
+  - It shouldn't be affected by dagre auto-layout. We need to check if we can bypass layout for specific node types.
+  - A small toolbar with a URL input to load the image.
+2. Update `src/components/Editor.tsx` to register `image` nodeType.
+3. Update Context Menu: add "Add Image Decoration" option.
+4. Update `getLayoutedElements` in `src/utils/layout.ts` to ignore `image` node type so it doesn't get swept up in auto-layout.

@@ -18,10 +18,10 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, } from 'lucide-react';
 import debounce from 'lodash.debounce';
 
-import { DecisionNode, TextNode, OutcomeNode, CustomEdge } from './nodes';
+import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode } from './nodes';
 import { getLayoutedElements } from '../utils/layout';
 import { ThemeSettings, defaultLightTheme, defaultDarkTheme } from '../types';
 
@@ -29,6 +29,7 @@ const nodeTypes = {
   decision: DecisionNode,
   text: TextNode,
   outcome: OutcomeNode,
+  image: DecorativeNode,
 };
 
 const edgeTypes = {
@@ -539,7 +540,7 @@ function FlowEditor() {
     [nodes, edges, setNodes, setEdges, triggerSnapshot]
   );
 
-  const addNode = (type: 'decision' | 'text' | 'outcome', menuX?: number, menuY?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
+  const addNode = (type: 'decision' | 'text' | 'outcome' | 'image', menuX?: number, menuY?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
     triggerSnapshot(true);
     let position = { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 100 };
     if (menuX !== undefined && menuY !== undefined && reactFlowWrapper.current) {
@@ -905,6 +906,8 @@ function FlowEditor() {
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('decision', menu.x, menu.y, menu.connectionParams)}>Decision Node</button>
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('text', menu.x, menu.y, menu.connectionParams)}>Note / Event Node</button>
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('outcome', menu.x, menu.y, menu.connectionParams)}>Outcome Node</button>
+                <div className="h-px bg-gray-200 dark:bg-gray-700 my-1 mx-2"></div>
+                <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('image', menu.x, menu.y, menu.connectionParams)}>Decorative Image</button>
                 {highlightedTargetId && (
                    <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => { setHighlightedTargetId(null); setMenu(prev => ({...prev, show: false})); }}>
                      <Waypoints size={14} /> Hide Path
