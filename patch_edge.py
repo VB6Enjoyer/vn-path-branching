@@ -1,50 +1,19 @@
-import React, { useState } from 'react';
-import {
-  BaseEdge,
-  EdgeLabelRenderer,
-  EdgeProps,
-  getBezierPath,
-  useReactFlow,
-} from '@xyflow/react';
-import { X } from 'lucide-react';
+import re
 
-export function CustomEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  style,
-  markerEnd,
-  label,
-  data
-}: EdgeProps) {
-  const { setEdges } = useReactFlow();
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  });
+with open('src/components/nodes/CustomEdge.tsx', 'r') as f:
+    content = f.read()
 
-  const [isHovered, setIsHovered] = useState(false);
+new_content = content.replace("import React from 'react';", "import React, { useState } from 'react';")
+
+replacement = """  const [isHovered, setIsHovered] = useState(false);
 
   const onEdgeClick = () => {
     setEdges((edges) => edges.filter((edge) => edge.id !== id));
-  };
+  };"""
 
-  const isHighlighted = !!data?.isHighlighted;
-  const isBlurred = !!data?.isBlurred;
+new_content = re.sub(r'  const onEdgeClick = \(\) => \{[^\}]+\};', replacement, new_content)
 
-  const edgeStyle = isHighlighted
-    ? { ...style, stroke: 'var(--path-highlight-color)', strokeWidth: 4, filter: 'drop-shadow(0 0 4px var(--path-highlight-color))' }
-    : style;
-
-  return (
+return_replacement = """  return (
     <>
       <g
         onMouseEnter={() => setIsHovered(true)}
@@ -112,5 +81,10 @@ export function CustomEdge({
         </div>
       </EdgeLabelRenderer>
     </>
-  );
-}
+  );"""
+
+# Replace the return block
+new_content = re.sub(r'  return \([\s\S]+?\);\n\}', return_replacement + '\n}', new_content)
+
+with open('src/components/nodes/CustomEdge.tsx', 'w') as f:
+    f.write(new_content)
