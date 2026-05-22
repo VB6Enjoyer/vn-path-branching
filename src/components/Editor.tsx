@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List } from 'lucide-react';
 import debounce from 'lodash.debounce';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode } from './nodes';
@@ -121,7 +121,7 @@ const getCleanNodes = (nodesToClean: Node[]) => {
 const MAX_HISTORY = 30;
 
 function FlowEditor() {
-  const { fitView, screenToFlowPosition } = useReactFlow();
+  const { fitView, screenToFlowPosition, setCenter } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,6 +136,7 @@ function FlowEditor() {
   const [lightTheme, setLightTheme] = useState<ThemeSettings>(defaultLightTheme);
   const [darkTheme, setDarkTheme] = useState<ThemeSettings>(defaultDarkTheme);
   const [showSettings, setShowSettings] = useState(false);
+  const [showEndings, setShowEndings] = useState(false);
 
   const activeTheme = isDarkMode ? darkTheme : lightTheme;
   const activeDefaultTheme = isDarkMode ? defaultDarkTheme : defaultLightTheme;
@@ -778,7 +779,14 @@ function FlowEditor() {
               <h3 className="font-bold text-sm text-gray-700 dark:text-gray-200">Add Nodes</h3>
               <div className="flex gap-1">
                 <button
-                  onClick={() => setShowSettings(!showSettings)}
+                  onClick={() => { setShowEndings(!showEndings); setShowSettings(false); }}
+                  className={`p-1 rounded-full transition ${showEndings ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
+                  title="View Endings"
+                >
+                  <List size={14} />
+                </button>
+                <button
+                  onClick={() => { setShowSettings(!showSettings); setShowEndings(false); }}
                   className={`p-1 rounded-full transition ${showSettings ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
                   title="Visual Settings"
                 >
@@ -850,6 +858,68 @@ function FlowEditor() {
                <input type="file" ref={fileInputRef} onChange={onImport} accept=".json" className="hidden" />
             </div>
           </Panel>
+
+
+          {showEndings && (
+            <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-72 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
+              <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><List size={16} /> Endings Directory</h3>
+                <button onClick={() => setShowEndings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {nodes.filter(n => n.type === 'outcome').length === 0 ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 italic text-center py-4">No endings found.</p>
+                ) : (
+                  nodes.filter(n => n.type === 'outcome').map((node) => {
+                    const outcomeType = node.data.outcomeType as 'good' | 'bad' | 'neutral' || 'neutral';
+                    const isRevealed = revealedNodeIds.has(node.id);
+                    const isBlurred = isSpoilerMode && !isRevealed;
+
+                    let bgClass = 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200';
+                    if (!isBlurred) {
+                      if (outcomeType === 'good') bgClass = 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200';
+                      if (outcomeType === 'bad') bgClass = 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
+                    }
+
+                    return (
+                      <div key={node.id} className={`flex flex-col gap-2 p-2 rounded border ${bgClass}`}>
+                        <div className="flex items-center justify-between">
+                           <span className={`text-sm font-semibold truncate flex-1 ${isBlurred ? 'blur-sm select-none' : ''}`}>
+                             {node.data.label as string || 'Unnamed Outcome'}
+                           </span>
+                           {!isBlurred && (
+                             <span className="text-[10px] uppercase font-bold opacity-60 ml-2 tracking-wider">
+                               {outcomeType}
+                             </span>
+                           )}
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          <button
+                            className="flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            onClick={() => setHighlightedTargetId(node.id)}
+                            title="Highlight path to this ending"
+                          >
+                            <Waypoints size={12} /> Highlight Path
+                          </button>
+                          <button
+                            className="flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            onClick={() => {
+                               if (node.position) {
+                                 setCenter(node.position.x + 100, node.position.y + 100, { zoom: 1, duration: 800 });
+                               }
+                            }}
+                            title="Locate in canvas"
+                          >
+                            <LocateFixed size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </Panel>
+          )}
 
           {showSettings && (
             <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-64 max-h-[80vh] overflow-y-auto mt-2" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>

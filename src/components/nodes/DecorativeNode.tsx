@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { NodeProps, NodeResizer, useReactFlow } from '@xyflow/react';
 import { Trash2, Image as ImageIcon, Check, X } from 'lucide-react';
 
