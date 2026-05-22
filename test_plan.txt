@@ -1,0 +1,10 @@
+1. Look at `OutcomeNode.tsx`: the data structure uses `data.outcome` (for text) and `data.type` (for 'good'/'bad'/'neutral').
+2. Look at `Editor.tsx`: the Endings Directory uses `node.data.label` (which is undefined/wrong) and `node.data.outcomeType` (which is also wrong, it should be `node.data.type`). Also, when initially creating the node, `addNode` creates it with `data: { label: 'New Outcome', outcomeType: 'neutral' }`.
+3. Fix `Editor.tsx`:
+   - Change `addNode` to populate `data: { outcome: 'Ending Name', type: 'neutral' }` when `type === 'outcome'`.
+   - Change `handleAddNode` (the context menu creator) to do the same.
+   - In the Endings Directory map:
+     `const outcomeType = node.data.type as 'good' | 'bad' | 'neutral' || 'neutral';`
+     `const outcomeText = node.data.outcome as string;`
+     `const displayName = outcomeText ? outcomeText : (outcomeType === 'good' ? 'Good Ending' : (outcomeType === 'bad' ? 'Bad Ending' : 'Neutral Ending'));`
+     Display `displayName`.

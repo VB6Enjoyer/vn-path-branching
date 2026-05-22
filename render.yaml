@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: vn-path-branching
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    branch: feat/brain-map-editor
