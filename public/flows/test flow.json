@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "title": "",
-    "author": "",
-    "timestamp": "2026-05-23T02:51:22.125Z"
+    "title": "Test Flow #1",
+    "author": "VB6Enjoyer",
+    "timestamp": "2026-05-23T03:01:46.812Z"
   },
   "nodes": [
     {
@@ -227,7 +227,7 @@
   "settings": {
     "light": {
       "fontFamily": "Inter",
-      "canvasBg": "#f9fafb",
+      "canvasBg": "#f5b4f5",
       "textBg": "#ffffff",
       "textColor": "#111827",
       "decisionColor": "#3b82f6",
