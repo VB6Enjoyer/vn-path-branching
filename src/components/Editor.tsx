@@ -310,12 +310,17 @@ function FlowEditor() {
   useEffect(() => {
     if (!isLoaded) return;
     const saveObj = {
+      metadata: {
+        title: flowTitle,
+        author: flowAuthor,
+        timestamp: new Date().toISOString()
+      },
       nodes: getCleanNodes(nodes),
       edges,
       settings: { light: lightTheme, dark: darkTheme }
     };
     localStorage.setItem('brain-map-flow', JSON.stringify(saveObj));
-  }, [nodes, edges, lightTheme, darkTheme, isLoaded]);
+  }, [nodes, edges, lightTheme, darkTheme, isLoaded, flowTitle, flowAuthor]);
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
@@ -852,6 +857,7 @@ function FlowEditor() {
           {activeTheme.logoUrl && (
              <Panel position="top-left" className="pointer-events-none opacity-90 m-6">
                 <img
+                  key={activeTheme.logoUrl}
                   src={activeTheme.logoUrl}
                   alt="VN Logo"
                   className="max-h-32 object-contain drop-shadow-xl"
@@ -1063,6 +1069,7 @@ function FlowEditor() {
                 <SettingRow label="Canvas Bg" settingKey="canvasBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Text Box Bg" settingKey="textBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Text Color" settingKey="textColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Path Default" settingKey="pathColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Path Glow" settingKey="pathHighlightColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
               </div>
 

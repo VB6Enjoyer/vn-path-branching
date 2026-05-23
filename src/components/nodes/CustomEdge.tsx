@@ -42,7 +42,7 @@ export function CustomEdge({
 
   const edgeStyle = isHighlighted
     ? { ...style, stroke: 'var(--path-highlight-color)', strokeWidth: 4, filter: 'drop-shadow(0 0 4px var(--path-highlight-color))' }
-    : style;
+    : { ...style, stroke: 'var(--path-color)' };
 
   return (
     <>

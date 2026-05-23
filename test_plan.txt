@@ -1,14 +1,15 @@
-1. We need to implement a modal to browse pre-existing flows.
-2. Since Next.js `public` directory doesn't have an API to list files client-side, we need an API route.
-   - Create `src/app/api/flows/route.ts` to scan `public/flows` or `flows` directory and return a list of available JSON files with basic parsed metadata.
-3. Flow JSON metadata updates:
-   - Export logic currently saves nodes, edges, activeTheme. We should add `title`, `author`, `timestamp`.
-   - Update `Editor.tsx` settings panel to include inputs for `Flow Title` and `Flow Author`.
-   - Update the export logic to embed these in the JSON.
-4. Implement the "Load Flow" modal:
-   - A button in the toolbar (maybe next to the 'Import' button) that says "Browse Flows".
-   - It fetches from `/api/flows`.
-   - Displays a modal with a CSS grid (3 columns).
-   - Shows image placeholder (or uses theme background color), Title, Author, Timestamp, Node Count.
-   - Provides filtering/sorting controls.
-   - Clicking a flow fetches the raw JSON and loads it into the editor.
+1. Bug 1: Logo URL not updating without reload.
+   - `Editor.tsx` renders the logo inside `<img src={activeTheme.logoUrl} ... onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />`
+   - Setting `display = 'none'` mutates the DOM permanently for that element. If the user fixes the URL, React might not recreate the `<img>` tag, so it remains hidden.
+   - Fix: Use a state variable `logoError` and reset it when `activeTheme.logoUrl` changes. Or add `key={activeTheme.logoUrl}` so React destroys and recreates the image.
+
+2. Bug 2: Title and Author not saved to localStorage.
+   - Look at the `useEffect` that saves to localStorage. It only saves `nodes`, `edges`, and `settings`.
+   - Update it to include `metadata: { title: flowTitle, author: flowAuthor }`.
+   - Update the `useEffect` that *loads* from localStorage to restore `metadata`.
+
+3. QoL 3: Capacity to set connector line color.
+   - `src/types.ts`: Add `pathColor: string` to `ThemeSettings`. Update `defaultLightTheme` (`#94a3b8`) and `defaultDarkTheme` (`#4b5563`).
+   - `src/components/nodes/CustomEdge.tsx`: Update to use `var(--path-color)`.
+   - `src/components/Editor.tsx`: Add css var `--path-color` to the `<ReactFlow style={...}>` inline block or similar injected styles.
+   - Add a setting in the Visual Settings panel: `SettingRow label="Path Color" settingKey="pathColor"`.
