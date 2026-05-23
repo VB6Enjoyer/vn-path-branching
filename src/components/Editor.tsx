@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock } from 'lucide-react';
 import debounce from 'lodash.debounce';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode } from './nodes';
@@ -156,6 +156,7 @@ function FlowEditor() {
   const [flowTitle, setFlowTitle] = useState<string>('');
   const [flowAuthor, setFlowAuthor] = useState<string>('');
   const [syncSharedSettings, setSyncSharedSettings] = useState(true);
+  const [isLocked, setIsLocked] = useState(false);
 
   const activeTheme = isDarkMode ? darkTheme : lightTheme;
   const activeDefaultTheme = isDarkMode ? defaultDarkTheme : defaultLightTheme;
@@ -422,7 +423,7 @@ function FlowEditor() {
     return nodes.map(node => {
       const isHighlighted = highlightedNodeIds.has(node.id);
       const isBlurred = isSpoilerMode && node.id !== 'start' && !revealedNodeIds.has(node.id);
-      const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode, isHighlighted, isBlurred };
+      const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode, isHighlighted, isBlurred, isLocked };
 
       if (node.type === 'decision') {
         data.onChoicesChange = (id: string, choices: string[]) => {
@@ -453,7 +454,7 @@ function FlowEditor() {
 
       return { ...node, data };
     });
-  }, [nodes, updateNodeData, deleteNode, setEdges, highlightedNodeIds, isSpoilerMode, revealedNodeIds]);
+  }, [nodes, updateNodeData, deleteNode, setEdges, highlightedNodeIds, isSpoilerMode, revealedNodeIds, isLocked]);
 
   const onConnectStart = useCallback(() => {
     isConnectingRef.current = true;
@@ -537,7 +538,7 @@ function FlowEditor() {
 
   const onPaneContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent) => {
-      if (event.shiftKey) return;
+      if (isLocked || event.shiftKey) return;
       event.preventDefault();
 
       if (reactFlowWrapper.current) {
@@ -550,12 +551,12 @@ function FlowEditor() {
         });
       }
     },
-    []
+    [isLocked]
   );
 
   const onNodeContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent, node: Node) => {
-      if (event.shiftKey) return;
+      if (isLocked || event.shiftKey) return;
       event.preventDefault();
 
       if (reactFlowWrapper.current) {
@@ -569,7 +570,7 @@ function FlowEditor() {
         });
       }
     },
-    []
+    [isLocked]
   );
 
   const onPaneClick = useCallback(() => {
@@ -718,6 +719,7 @@ function FlowEditor() {
           setNodes(flow.nodes);
           setEdges(flow.edges);
           setHighlightedTargetId(null);
+          setIsLocked(true);
         }
         if (flow && flow.settings) {
           if (flow.settings.light) setTimeout(() => setLightTheme({ ...defaultLightTheme, ...flow.settings.light }), 0);
@@ -803,11 +805,12 @@ function FlowEditor() {
           ...edge.data,
           onDelete: handleDeleteEdge,
           isHighlighted: highlightedEdgeIds.has(edge.id),
+          isLocked,
           isBlurred
         }
       };
     });
-  }, [edges, handleDeleteEdge, highlightedEdgeIds, isSpoilerMode, revealedNodeIds]);
+  }, [edges, handleDeleteEdge, highlightedEdgeIds, isSpoilerMode, revealedNodeIds, isLocked]);
 
   return (
     <>
@@ -850,6 +853,10 @@ function FlowEditor() {
           onPaneClick={onPaneClick}
           onPaneContextMenu={onPaneContextMenu}
           onNodeContextMenu={onNodeContextMenu}
+          nodesDraggable={!isLocked}
+          nodesConnectable={!isLocked}
+          elementsSelectable={!isLocked}
+          edgesFocusable={!isLocked}
           onNodeClick={onNodeClick}
           onNodeDragStart={onNodeDragStart}
           nodeTypes={nodeTypes}
@@ -891,6 +898,13 @@ function FlowEditor() {
                   <List size={14} />
                 </button>
                 <button
+                  onClick={() => setIsLocked(!isLocked)}
+                  className={`p-1 rounded-full transition ${isLocked ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
+                  title={isLocked ? "Unlock Canvas" : "Lock Canvas (Read-Only)"}
+                >
+                  {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
+                </button>
+                <button
                   onClick={() => { setShowSettings(!showSettings); setShowEndings(false); }}
                   className={`p-1 rounded-full transition ${showSettings ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
                   title="Visual Settings"
@@ -927,7 +941,7 @@ function FlowEditor() {
             <div className="flex gap-2">
               <button
                 onClick={undo}
-                disabled={past.length === 0}
+                disabled={isLocked || past.length === 0}
                 className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition flex justify-center items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Undo (Ctrl+Z)"
               >
@@ -935,7 +949,7 @@ function FlowEditor() {
               </button>
               <button
                 onClick={redo}
-                disabled={future.length === 0}
+                disabled={isLocked || future.length === 0}
                 className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition flex justify-center items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Redo (Ctrl+Shift+Z)"
               >
@@ -949,7 +963,7 @@ function FlowEditor() {
             </button>
 
             <hr className="my-1 border-gray-100 dark:border-gray-700" />
-            <button onClick={startFromScratch} className="w-full px-3 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded text-sm hover:bg-red-100 dark:hover:bg-red-900/50 transition flex items-center justify-center gap-2 font-semibold">
+            <button onClick={startFromScratch} disabled={isLocked} className="w-full px-3 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded text-sm hover:bg-red-100 dark:hover:bg-red-900/50 transition flex items-center justify-center gap-2 font-semibold">
               <FilePlus size={14} /> New Flow
             </button>
 
@@ -964,7 +978,7 @@ function FlowEditor() {
                <button onClick={onExport} title="Export JSON" className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
                   <Download size={16} />
                </button>
-               <button onClick={() => fileInputRef.current?.click()} title="Import JSON" className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+               <button onClick={() => !isLocked && fileInputRef.current?.click()} title={isLocked ? "Unlock to Import JSON" : "Import JSON"} className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
                   <Upload size={16} />
                </button>
                <input type="file" ref={fileInputRef} onChange={onImport} accept=".json" className="hidden" />

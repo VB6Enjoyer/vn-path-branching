@@ -81,6 +81,7 @@ export function DecisionNode({ data, id }: NodeProps) {
   };
 
   const isHighlighted = !!data.isHighlighted;
+  const isLocked = !!data.isLocked;
   const borderColor = isHighlighted ? 'var(--path-highlight-color)' : 'var(--decision-color)';
   const boxShadow = isHighlighted ? '0 0 15px var(--path-highlight-color)' : undefined;
   const isBlurred = !!data.isBlurred;
@@ -101,7 +102,9 @@ export function DecisionNode({ data, id }: NodeProps) {
           </button>
           <button
             onClick={handleDelete}
-            className="hover:text-red-300 hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+            disabled={isLocked}
+            className={`hover:text-red-300 hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${isLocked ? 'hidden' : ''}`}
+
             title="Delete Node (Shift+Click to bypass confirm)"
           >
             <Trash2 size={14} />
@@ -115,8 +118,8 @@ export function DecisionNode({ data, id }: NodeProps) {
             className="w-full text-sm p-2 border rounded mb-3 resize-none nodrag focus:outline-none"
             style={{ backgroundColor: 'var(--text-bg)', color: 'var(--text-color)', borderColor: 'var(--decision-color)' }}
             rows={2}
-            value={prompt}
-            onChange={(e) => updatePrompt(e.target.value)}
+            value={prompt} readOnly={isLocked}
+            onChange={(e) => !isLocked && updatePrompt(e.target.value)}
             placeholder="What happens next?"
           />
         )}
@@ -130,8 +133,8 @@ export function DecisionNode({ data, id }: NodeProps) {
                 <input
                   className={`flex-1 text-sm p-1 border rounded nodrag focus:outline-none transition-shadow ${isChoiceHighlighted ? 'ring-2 ring-offset-1 ring-blue-400 dark:ring-blue-500' : ''}`}
                   style={{ backgroundColor: 'var(--text-bg)', color: 'var(--text-color)', borderColor: 'var(--decision-color)' }}
-                  value={choice}
-                  onChange={(e) => updateChoice(index, e.target.value)}
+                  value={choice} readOnly={isLocked}
+                  onChange={(e) => !isLocked && updateChoice(index, e.target.value)}
                 />
                 <button
                   onClick={() => removeChoice(index)}
@@ -146,7 +149,8 @@ export function DecisionNode({ data, id }: NodeProps) {
 
         <button
           onClick={addChoice}
-          className="w-full py-1 text-sm border rounded flex items-center justify-center gap-1 transition-colors hover:opacity-80"
+          disabled={isLocked}
+          className={`w-full py-1 text-sm border rounded flex items-center justify-center gap-1 transition-colors mt-2 ${isLocked ? 'hidden' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
           style={{ borderColor: 'var(--decision-color)', color: 'var(--decision-color)' }}
         >
           <Plus size={14} /> Add Choice
