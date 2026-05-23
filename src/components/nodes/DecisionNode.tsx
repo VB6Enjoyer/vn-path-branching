@@ -95,7 +95,8 @@ export function DecisionNode({ data, id }: NodeProps) {
         <div className="flex gap-1">
           <button
             onClick={toggleTextHidden}
-            className="hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+            disabled={isLocked}
+            className={`hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${isLocked ? 'hidden' : ''}`}
             title="Toggle Text Box"
           >
             {isTextHidden ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -138,7 +139,8 @@ export function DecisionNode({ data, id }: NodeProps) {
                 />
                 <button
                   onClick={() => removeChoice(index)}
-                  className="text-red-500 hover:bg-red-100 p-1 rounded transition-colors"
+                  disabled={isLocked}
+                  className={`text-red-500 hover:bg-red-100 p-1 rounded transition-colors ${isLocked ? 'hidden' : ''}`}
                 >
                   <X size={14} />
                 </button>

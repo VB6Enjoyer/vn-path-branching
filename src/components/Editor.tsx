@@ -898,7 +898,7 @@ function FlowEditor() {
                   <List size={14} />
                 </button>
                 <button
-                  onClick={() => setIsLocked(!isLocked)}
+                  onClick={() => { setIsLocked(!isLocked); setShowSettings(false); }}
                   className={`p-1 rounded-full transition ${isLocked ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
                   title={isLocked ? "Unlock Canvas" : "Lock Canvas (Read-Only)"}
                 >
@@ -906,8 +906,9 @@ function FlowEditor() {
                 </button>
                 <button
                   onClick={() => { setShowSettings(!showSettings); setShowEndings(false); }}
-                  className={`p-1 rounded-full transition ${showSettings ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
-                  title="Visual Settings"
+                  disabled={isLocked}
+                  className={`p-1 rounded-full transition ${showSettings ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                  title={isLocked ? "Unlock Canvas to Edit Settings" : "Visual Settings"}
                 >
                   <Settings size={14} />
                 </button>
@@ -957,7 +958,7 @@ function FlowEditor() {
               </button>
             </div>
 
-            <button onClick={() => onLayout('TB')} className="w-full px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded text-sm hover:bg-gray-700 dark:hover:bg-gray-600 transition">Auto Layout Tree</button>
+            <button onClick={() => onLayout('TB')} disabled={isLocked} className="w-full px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded text-sm hover:bg-gray-700 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed">Auto Layout Tree</button>
             <button onClick={centerOnStart} className="w-full px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition flex items-center justify-center gap-2">
               <LocateFixed size={14} /> Locate Start
             </button>

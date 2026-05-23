@@ -1,33 +1,9 @@
-The user mentioned a button to "Toggle Interactivity" but looking at the codebase, there is no such button right now! They probably meant to say they want this button implemented (they said "There's a button... Problem is: it hardly works"). Or wait, maybe there IS a button in the UI that I missed. Let me check the icons.
-There are buttons for Settings, Spoiler Mode, Export, Import, Load Flow, Locate, Theme Toggle, Add Nodes (Context Menu + Pane click), Undo, Redo, Clear Flow.
-
-Wait! Maybe they are using the default `<Controls />` from ReactFlow?
-`<Controls />` has an interactive toggle (a lock icon) built-in!
-ReactFlow's built-in `<Controls />` component includes a lock button that toggles `nodesDraggable` and `nodesConnectable` but DOES NOT disable custom UI components or ReactFlow's context menus.
-
-Ah! That's exactly it. ReactFlow's `<Controls />` has a lock button that toggles the `reactFlowInstance.getInteractable()` or similar internal state.
-Wait, if the user clicks the lock in `<Controls />`, ReactFlow changes `nodesDraggable`, `nodesConnectable`, and `elementsSelectable`. But since we render custom nodes with input fields, those input fields don't know they are supposed to be locked!
-
-So we need our own `isInteractive` state in `Editor.tsx`. We can hide the default `<Controls />` lock button, and instead build our own lock button (or just disable the default one and build ours, or listen to the state).
-Actually, ReactFlow `<Controls />` has `showInteractive={false}` to hide the built-in lock.
-We can hide it, add our own Lock/Unlock button (e.g. using `Lock` and `Unlock` icons from lucide-react) to the toolbar.
+1. Disable Remove Choice: In `DecisionNode.tsx`, the `removeChoice` function or its button should be guarded by `isLocked`. In `patch_nodes_lock.py` I had `disabled={isLocked}` and `hidden`, but I used a regex that might have failed to match the `onClick` correctly because of line breaks or formatting. I'll check `DecisionNode.tsx`.
+2. Disable Hide/Show Text Boxes: `DecisionNode` and `TextNode` both have `toggleTextHidden` functions triggered by an Eye icon button. I need to disable/hide these buttons if `isLocked` is true.
+3. Disable Add/Remove Images: `TextNode.tsx` has `setShowMediaInput`. `DecorativeNode.tsx` has `setShowInput`. I'll verify they're disabled.
+4. Disable Settings Menu: In `Editor.tsx`, the "Visual Settings" button in the `top-right` panel should be disabled or completely hidden when `isLocked`.
+5. Disable Auto Layout: In `Editor.tsx`, the "Auto Layout Tree" button should be disabled (`disabled={isLocked}`).
 
 Plan:
-1. State: Add `const [isLocked, setIsLocked] = useState(false);` to `Editor.tsx`.
-2. UI Button: Add a Lock/Unlock button to the main toolbar (next to Visual Settings / Spoiler Mode).
-3. ReactFlow props: Pass `nodesDraggable={!isLocked}`, `nodesConnectable={!isLocked}`, `elementsSelectable={!isLocked}` to `<ReactFlow>`.
-4. Hide default lock: `<Controls showInteractive={false} />`.
-5. Pass `isLocked` to all node components via `data`:
-   Update `nodesWithCallbacks` to inject `isLocked` into `node.data`.
-   Update `edgesWithCallbacks` to inject `isLocked` into `edge.data`.
-6. Node Customizations:
-   - `DecisionNode.tsx`, `TextNode.tsx`, `OutcomeNode.tsx`, `DecorativeNode.tsx`, `CustomEdge.tsx`:
-     Receive `data.isLocked`. Disable all `<input>`, `<textarea>`, `<select>`, `<button>` elements if `isLocked`. Hide "Delete" or "Add Choice" buttons. Disable image upload toggles.
-7. Editor Customizations:
-   - Context menus: If `isLocked`, don't show the `onPaneContextMenu` or `onNodeContextMenu`.
-   - Undo/Redo/Auto-Layout buttons: Hide or disable them if `isLocked`.
-   - New Flow button: Hide or disable if `isLocked`.
-   - Delete bindings (Backspace/Del key in `onNodesChange`/`onEdgesChange`): ReactFlow handles this automatically if `elementsSelectable=false`, but let's be sure.
-8. Update `loadFlowFromUrl` (and `onImport`) to set `setIsLocked(true)`.
-
-Let's do this!
+- Write a python script to patch `DecisionNode.tsx` and `TextNode.tsx` to properly hide/disable the text hide/show buttons and ensure the remove choice buttons are actually hidden.
+- Write a python script to patch `Editor.tsx` to hide/disable settings and auto layout.
