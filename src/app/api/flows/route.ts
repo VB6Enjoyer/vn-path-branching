@@ -26,6 +26,7 @@ export async function GET() {
         let author = 'Anonymous';
         let timestamp = null;
         let canvasBg = null;
+        let logoUrl = null;
 
         if (data.metadata) {
           if (data.metadata.title) title = data.metadata.title;
@@ -33,8 +34,13 @@ export async function GET() {
           if (data.metadata.timestamp) timestamp = data.metadata.timestamp;
         }
 
-        if (data.settings && data.settings.light && data.settings.light.canvasBg) {
-          canvasBg = data.settings.light.canvasBg;
+        if (data.settings && data.settings.light) {
+          canvasBg = data.settings.light.canvasBg || null;
+          logoUrl = data.settings.light.logoUrl || null;
+        }
+
+        if (!logoUrl && data.settings && data.settings.dark) {
+          logoUrl = data.settings.dark.logoUrl || null;
         }
 
         return {
@@ -43,7 +49,8 @@ export async function GET() {
           author,
           timestamp,
           nodeCount,
-          canvasBg
+          canvasBg,
+          logoUrl
         };
       } catch (err) {
         console.error(`Error parsing flow file ${file}:`, err);

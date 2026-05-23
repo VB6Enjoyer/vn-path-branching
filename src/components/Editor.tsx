@@ -146,6 +146,7 @@ function FlowEditor() {
     timestamp: string | null;
     nodeCount: number;
     canvasBg: string | null;
+    logoUrl: string | null;
   };
   const [flowsList, setFlowsList] = useState<FlowItem[]>([]);
   const [flowsLoading, setFlowsLoading] = useState(false);
@@ -154,6 +155,7 @@ function FlowEditor() {
   const [showEndings, setShowEndings] = useState(false);
   const [flowTitle, setFlowTitle] = useState<string>('');
   const [flowAuthor, setFlowAuthor] = useState<string>('');
+  const [syncSharedSettings, setSyncSharedSettings] = useState(true);
 
   const activeTheme = isDarkMode ? darkTheme : lightTheme;
   const activeDefaultTheme = isDarkMode ? defaultDarkTheme : defaultLightTheme;
@@ -1028,6 +1030,18 @@ function FlowEditor() {
               </div>
 
               <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100 dark:border-gray-700">
+                  <input
+                    type="checkbox"
+                    id="syncSettings"
+                    checked={syncSharedSettings}
+                    onChange={(e) => setSyncSharedSettings(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="syncSettings" className="text-xs text-gray-600 dark:text-gray-300 select-none cursor-pointer">
+                    Sync Logo & Font between themes
+                  </label>
+                </div>
                 <SettingRow label="Logo URL" settingKey="logoUrl" type="text" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Google Font" settingKey="fontFamily" type="text" list="fonts" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <datalist id="fonts">
@@ -1128,9 +1142,18 @@ function FlowEditor() {
                           onClick={() => loadFlowFromUrl(flow.filename)}
                         >
                           <div
-                            className="h-32 w-full border-b border-gray-100 dark:border-gray-700 transition-colors"
+                            className="h-32 w-full border-b border-gray-100 dark:border-gray-700 transition-colors flex items-center justify-center relative overflow-hidden"
                             style={{ backgroundColor: flow.canvasBg || '#f3f4f6' }}
-                          ></div>
+                          >
+                            {flow.logoUrl && (
+                               <img
+                                 src={flow.logoUrl}
+                                 alt="Flow Logo"
+                                 className="max-h-24 max-w-[80%] object-contain drop-shadow-md z-10"
+                                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                               />
+                            )}
+                          </div>
                           <div className="p-4 flex-1 flex flex-col">
                             <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-1" title={flow.title}>{flow.title}</h3>
                             <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 mb-3">
