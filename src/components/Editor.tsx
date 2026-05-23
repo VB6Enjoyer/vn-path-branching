@@ -422,7 +422,7 @@ function FlowEditor() {
   const nodesWithCallbacks = useMemo(() => {
     return nodes.map(node => {
       const isHighlighted = highlightedNodeIds.has(node.id);
-      const isBlurred = isSpoilerMode && node.id !== 'start' && !revealedNodeIds.has(node.id);
+      const isBlurred = isSpoilerMode && node.id !== 'start' && node.type !== 'image' && !revealedNodeIds.has(node.id);
       const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode, isHighlighted, isBlurred, isLocked };
 
       if (node.type === 'decision') {

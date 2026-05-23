@@ -1,9 +1,4 @@
-1. Disable Remove Choice: In `DecisionNode.tsx`, the `removeChoice` function or its button should be guarded by `isLocked`. In `patch_nodes_lock.py` I had `disabled={isLocked}` and `hidden`, but I used a regex that might have failed to match the `onClick` correctly because of line breaks or formatting. I'll check `DecisionNode.tsx`.
-2. Disable Hide/Show Text Boxes: `DecisionNode` and `TextNode` both have `toggleTextHidden` functions triggered by an Eye icon button. I need to disable/hide these buttons if `isLocked` is true.
-3. Disable Add/Remove Images: `TextNode.tsx` has `setShowMediaInput`. `DecorativeNode.tsx` has `setShowInput`. I'll verify they're disabled.
-4. Disable Settings Menu: In `Editor.tsx`, the "Visual Settings" button in the `top-right` panel should be disabled or completely hidden when `isLocked`.
-5. Disable Auto Layout: In `Editor.tsx`, the "Auto Layout Tree" button should be disabled (`disabled={isLocked}`).
-
-Plan:
-- Write a python script to patch `DecisionNode.tsx` and `TextNode.tsx` to properly hide/disable the text hide/show buttons and ensure the remove choice buttons are actually hidden.
-- Write a python script to patch `Editor.tsx` to hide/disable settings and auto layout.
+The user wants decorative image nodes to bypass spoiler mode blurring since they are just decorations.
+1. Check where `isBlurred` is passed or used.
+2. In `Editor.tsx`, `const isBlurred = isSpoilerMode && node.id !== 'start' && !revealedNodeIds.has(node.id);`
+   Change this to: `const isBlurred = isSpoilerMode && node.id !== 'start' && node.type !== 'image' && !revealedNodeIds.has(node.id);`
