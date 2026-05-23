@@ -1,15 +1,8 @@
-1. Bug 1: Logo URL not updating without reload.
-   - `Editor.tsx` renders the logo inside `<img src={activeTheme.logoUrl} ... onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />`
-   - Setting `display = 'none'` mutates the DOM permanently for that element. If the user fixes the URL, React might not recreate the `<img>` tag, so it remains hidden.
-   - Fix: Use a state variable `logoError` and reset it when `activeTheme.logoUrl` changes. Or add `key={activeTheme.logoUrl}` so React destroys and recreates the image.
+Okay, I see the bugs.
+1. The regex for `--path-color` addition in Editor.tsx failed in my previous patch, so the CSS variable was never created in the `<style>` block, causing lines to disappear.
+2. The regex for the localStorage metadata parse also failed, so title/author were never restored.
 
-2. Bug 2: Title and Author not saved to localStorage.
-   - Look at the `useEffect` that saves to localStorage. It only saves `nodes`, `edges`, and `settings`.
-   - Update it to include `metadata: { title: flowTitle, author: flowAuthor }`.
-   - Update the `useEffect` that *loads* from localStorage to restore `metadata`.
-
-3. QoL 3: Capacity to set connector line color.
-   - `src/types.ts`: Add `pathColor: string` to `ThemeSettings`. Update `defaultLightTheme` (`#94a3b8`) and `defaultDarkTheme` (`#4b5563`).
-   - `src/components/nodes/CustomEdge.tsx`: Update to use `var(--path-color)`.
-   - `src/components/Editor.tsx`: Add css var `--path-color` to the `<ReactFlow style={...}>` inline block or similar injected styles.
-   - Add a setting in the Visual Settings panel: `SettingRow label="Path Color" settingKey="pathColor"`.
+Plan:
+1. Fix the CSS variables block in Editor.tsx to include `--path-color`.
+2. Fix the localStorage parse block to restore `flow.metadata.title` and `author`.
+3. Verify fixes.

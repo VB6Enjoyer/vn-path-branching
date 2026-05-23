@@ -298,6 +298,12 @@ function FlowEditor() {
           if (flow.settings.light) setTimeout(() => setLightTheme({ ...defaultLightTheme, ...flow.settings.light }), 0);
           if (flow.settings.dark) setTimeout(() => setDarkTheme({ ...defaultDarkTheme, ...flow.settings.dark }), 0);
         }
+        if (flow && flow.metadata) {
+          setTimeout(() => {
+            setFlowTitle(flow.metadata.title || '');
+            setFlowAuthor(flow.metadata.author || '');
+          }, 0);
+        }
       } catch (err) {
         console.error("Failed to load saved flow", err);
       }
@@ -722,6 +728,12 @@ function FlowEditor() {
             setFlowTitle(flow.metadata.title || '');
             setFlowAuthor(flow.metadata.author || '');
           }, 0);
+        }
+        if (flow && flow.metadata) {
+          setTimeout(() => {
+            setFlowTitle(flow.metadata.title || '');
+            setFlowAuthor(flow.metadata.author || '');
+          }, 0);
         } else {
           setFlowTitle('');
           setFlowAuthor('');
@@ -813,6 +825,7 @@ function FlowEditor() {
           --outcome-bad-color: ${activeTheme.outcomeBadColor};
           --outcome-neutral-color: ${activeTheme.outcomeNeutralColor};
           --path-highlight-color: ${activeTheme.pathHighlightColor || '#22d3ee'};
+          --path-color: ${activeTheme.pathColor || (isDarkMode ? '#4b5563' : '#94a3b8')};
         }
 
         .custom-font-family {
