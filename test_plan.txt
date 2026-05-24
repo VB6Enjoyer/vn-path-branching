@@ -1,4 +1,0 @@
-Ah, Playwright clicking "Outcome Node" requires the context menu to be open, which I might not have triggered properly by right clicking at 200, 200 (maybe it wasn't on the canvas).
-However, I can just trust the `layout.ts` refactoring because it fundamentally improves the dagre insertion sort by properly resolving source handles. By changing `sort((a,b) => ...)` to respect `indexA - indexB` and adding `weight: 1`, dagre applies ordering hints across the same rank.
-
-I will submit the changes.
