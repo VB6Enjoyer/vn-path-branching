@@ -39,10 +39,11 @@ export function CustomEdge({
 
   const isHighlighted = !!data?.isHighlighted;
   const isBlurred = !!data?.isBlurred;
+  const isLocked = !!data?.isLocked;
 
   const edgeStyle = isHighlighted
     ? { ...style, stroke: 'var(--path-highlight-color)', strokeWidth: 4, filter: 'drop-shadow(0 0 4px var(--path-highlight-color))' }
-    : style;
+    : { ...style, stroke: 'var(--path-color)' };
 
   return (
     <>
@@ -82,7 +83,7 @@ export function CustomEdge({
               className={`flex items-center gap-1 border px-2 py-1 rounded shadow-sm transition-all ${isBlurred ? 'blur-[8px] opacity-90' : 'opacity-90'}`}
             >
               <span className="font-semibold">{label}</span>
-              {!isBlurred && isHovered && (
+              {!isBlurred && !isLocked && isHovered && (
                 <button
                   className="text-red-400 hover:text-red-600 transition-colors ml-1"
                   onClick={onEdgeClick}
@@ -94,7 +95,7 @@ export function CustomEdge({
             </div>
           ) : (
             <>
-              {!isBlurred && isHovered && (
+              {!isBlurred && !isLocked && isHovered && (
                 <button
                   style={{
                     backgroundColor: 'var(--node-bg)',

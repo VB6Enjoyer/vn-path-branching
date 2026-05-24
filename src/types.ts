@@ -9,33 +9,36 @@ export interface ThemeSettings {
   outcomeBadColor: string;
   outcomeNeutralColor: string;
   pathHighlightColor: string;
+  pathColor: string;
   logoUrl: string;
 }
 
 export const defaultLightTheme: ThemeSettings = {
   fontFamily: 'Inter',
-  canvasBg: '#f9fafb', // gray-50
+  canvasBg: '#f9fafb',
   textBg: '#ffffff',
-  textColor: '#111827', // gray-900
-  decisionColor: '#3b82f6', // blue-500
-  noteColor: '#eab308', // yellow-500
-  outcomeGoodColor: '#22c55e', // green-500
-  outcomeBadColor: '#ef4444', // red-500
-  outcomeNeutralColor: '#a855f7', // purple-500
-  pathHighlightColor: '#06b6d4', // cyan-500
+  textColor: '#111827',
+  decisionColor: '#3b82f6',
+  noteColor: '#eab308',
+  outcomeGoodColor: '#22c55e',
+  outcomeBadColor: '#ef4444',
+  outcomeNeutralColor: '#a855f7',
+  pathHighlightColor: '#06b6d4',
+  pathColor: '#94a3b8',
   logoUrl: '',
 };
 
 export const defaultDarkTheme: ThemeSettings = {
   fontFamily: 'Inter',
-  canvasBg: '#111827', // gray-900
-  textBg: '#1f2937', // gray-800
-  textColor: '#f9fafb', // gray-50
-  decisionColor: '#2563eb', // blue-600
-  noteColor: '#ca8a04', // yellow-600
-  outcomeGoodColor: '#16a34a', // green-600
-  outcomeBadColor: '#dc2626', // red-600
-  outcomeNeutralColor: '#9333ea', // purple-600
-  pathHighlightColor: '#22d3ee', // cyan-400
+  canvasBg: '#111827',
+  textBg: '#1f2937',
+  textColor: '#f9fafb',
+  decisionColor: '#2563eb',
+  noteColor: '#ca8a04',
+  outcomeGoodColor: '#16a34a',
+  outcomeBadColor: '#dc2626',
+  outcomeNeutralColor: '#9333ea',
+  pathHighlightColor: '#22d3ee',
+  pathColor: '#4b5563',
   logoUrl: '',
 };

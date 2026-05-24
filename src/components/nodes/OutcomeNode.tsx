@@ -34,6 +34,7 @@ export function OutcomeNode({ data, id }: NodeProps) {
   };
 
   const isHighlighted = !!data.isHighlighted;
+  const isLocked = !!data.isLocked;
   const isBlurred = !!data.isBlurred;
 
   const getColor = () => {
@@ -57,7 +58,9 @@ export function OutcomeNode({ data, id }: NodeProps) {
         <span>Outcome / Ending</span>
         <button
           onClick={handleDelete}
-          className="hover:text-red-300 hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+          disabled={isLocked}
+          className={`hover:text-red-300 hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${isLocked ? 'hidden' : ''}`}
+
           title="Delete Node (Shift+Click to bypass confirm)"
         >
           <Trash2 size={12} />
@@ -68,16 +71,16 @@ export function OutcomeNode({ data, id }: NodeProps) {
         <input
           className="w-full text-center font-bold text-sm p-1 border-b bg-transparent mb-2 nodrag focus:outline-none"
           style={{ color: 'var(--text-color)', borderColor: color }}
-          value={outcome}
-          onChange={(e) => updateOutcome(e.target.value)}
+          value={outcome} readOnly={isLocked}
+          onChange={(e) => !isLocked && updateOutcome(e.target.value)}
           placeholder="Ending Name"
         />
 
         <select
           className="w-full text-xs p-1 border rounded nodrag focus:outline-none"
           style={{ backgroundColor: 'var(--text-bg)', color: 'var(--text-color)', borderColor: color }}
-          value={type}
-          onChange={(e) => updateType(e.target.value)}
+          value={type} disabled={isLocked}
+          onChange={(e) => !isLocked && updateType(e.target.value)}
         >
           <option value="good">Good Ending</option>
           <option value="neutral">Neutral Ending</option>

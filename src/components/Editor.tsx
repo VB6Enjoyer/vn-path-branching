@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock } from 'lucide-react';
 import debounce from 'lodash.debounce';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode } from './nodes';
@@ -91,6 +91,8 @@ const SettingRow = ({
           onChange={(e) => updateActiveTheme(settingKey, e.target.value)}
           className={type === 'color' ? "w-8 h-8 rounded cursor-pointer border-0 p-0" : "w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"}
         />
+
+
       </div>
     </div>
   );
@@ -136,7 +138,25 @@ function FlowEditor() {
   const [lightTheme, setLightTheme] = useState<ThemeSettings>(defaultLightTheme);
   const [darkTheme, setDarkTheme] = useState<ThemeSettings>(defaultDarkTheme);
   const [showSettings, setShowSettings] = useState(false);
+  const [showFlowBrowser, setShowFlowBrowser] = useState(false);
+    type FlowItem = {
+    filename: string;
+    title: string;
+    author: string;
+    timestamp: string | null;
+    nodeCount: number;
+    canvasBg: string | null;
+    logoUrl: string | null;
+  };
+  const [flowsList, setFlowsList] = useState<FlowItem[]>([]);
+  const [flowsLoading, setFlowsLoading] = useState(false);
+  const [flowsSearch, setFlowsSearch] = useState('');
+  const [flowsSort, setFlowsSort] = useState<'title' | 'date' | 'author' | 'nodes'>('date');
   const [showEndings, setShowEndings] = useState(false);
+  const [flowTitle, setFlowTitle] = useState<string>('');
+  const [flowAuthor, setFlowAuthor] = useState<string>('');
+  const [syncSharedSettings, setSyncSharedSettings] = useState(true);
+  const [isLocked, setIsLocked] = useState(false);
 
   const activeTheme = isDarkMode ? darkTheme : lightTheme;
   const activeDefaultTheme = isDarkMode ? defaultDarkTheme : defaultLightTheme;
@@ -159,6 +179,27 @@ function FlowEditor() {
   const [past, setPast] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
   const [future, setFuture] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
 
+  const fetchFlows = async () => {
+    setFlowsLoading(true);
+    try {
+      const res = await fetch('/api/flows');
+      const data = await res.json();
+      if (data.flows) {
+        setFlowsList(data.flows);
+      }
+    } catch (err) {
+      console.error("Error fetching flows:", err);
+    } finally {
+      setFlowsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showFlowBrowser) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchFlows();
+    }
+  }, [showFlowBrowser]);
   const [highlightedTargetId, setHighlightedTargetId] = useState<string | null>(null);
 
   // Spoiler Mode State
@@ -258,6 +299,12 @@ function FlowEditor() {
           if (flow.settings.light) setTimeout(() => setLightTheme({ ...defaultLightTheme, ...flow.settings.light }), 0);
           if (flow.settings.dark) setTimeout(() => setDarkTheme({ ...defaultDarkTheme, ...flow.settings.dark }), 0);
         }
+        if (flow && flow.metadata) {
+          setTimeout(() => {
+            setFlowTitle(flow.metadata.title || '');
+            setFlowAuthor(flow.metadata.author || '');
+          }, 0);
+        }
       } catch (err) {
         console.error("Failed to load saved flow", err);
       }
@@ -270,12 +317,17 @@ function FlowEditor() {
   useEffect(() => {
     if (!isLoaded) return;
     const saveObj = {
+      metadata: {
+        title: flowTitle,
+        author: flowAuthor,
+        timestamp: new Date().toISOString()
+      },
       nodes: getCleanNodes(nodes),
       edges,
       settings: { light: lightTheme, dark: darkTheme }
     };
     localStorage.setItem('brain-map-flow', JSON.stringify(saveObj));
-  }, [nodes, edges, lightTheme, darkTheme, isLoaded]);
+  }, [nodes, edges, lightTheme, darkTheme, isLoaded, flowTitle, flowAuthor]);
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
@@ -370,8 +422,8 @@ function FlowEditor() {
   const nodesWithCallbacks = useMemo(() => {
     return nodes.map(node => {
       const isHighlighted = highlightedNodeIds.has(node.id);
-      const isBlurred = isSpoilerMode && node.id !== 'start' && !revealedNodeIds.has(node.id);
-      const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode, isHighlighted, isBlurred };
+      const isBlurred = isSpoilerMode && node.id !== 'start' && node.type !== 'image' && !revealedNodeIds.has(node.id);
+      const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode, isHighlighted, isBlurred, isLocked };
 
       if (node.type === 'decision') {
         data.onChoicesChange = (id: string, choices: string[]) => {
@@ -402,7 +454,7 @@ function FlowEditor() {
 
       return { ...node, data };
     });
-  }, [nodes, updateNodeData, deleteNode, setEdges, highlightedNodeIds, isSpoilerMode, revealedNodeIds]);
+  }, [nodes, updateNodeData, deleteNode, setEdges, highlightedNodeIds, isSpoilerMode, revealedNodeIds, isLocked]);
 
   const onConnectStart = useCallback(() => {
     isConnectingRef.current = true;
@@ -486,7 +538,7 @@ function FlowEditor() {
 
   const onPaneContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent) => {
-      if (event.shiftKey) return;
+      if (isLocked || event.shiftKey) return;
       event.preventDefault();
 
       if (reactFlowWrapper.current) {
@@ -499,12 +551,12 @@ function FlowEditor() {
         });
       }
     },
-    []
+    [isLocked]
   );
 
   const onNodeContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent, node: Node) => {
-      if (event.shiftKey) return;
+      if (isLocked || event.shiftKey) return;
       event.preventDefault();
 
       if (reactFlowWrapper.current) {
@@ -518,7 +570,7 @@ function FlowEditor() {
         });
       }
     },
-    []
+    [isLocked]
   );
 
   const onPaneClick = useCallback(() => {
@@ -634,6 +686,11 @@ function FlowEditor() {
 
   const onExport = () => {
     const saveObj = {
+      metadata: {
+        title: flowTitle,
+        author: flowAuthor,
+        timestamp: new Date().toISOString()
+      },
       nodes: getCleanNodes(nodes),
       edges,
       settings: { light: lightTheme, dark: darkTheme }
@@ -641,7 +698,8 @@ function FlowEditor() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(saveObj, null, 2));
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href",     dataStr);
-    downloadAnchorNode.setAttribute("download", "brain-map-flow.json");
+    const filename = flowTitle ? `${flowTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json` : "brain-map-flow.json";
+    downloadAnchorNode.setAttribute("download", filename);
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
@@ -661,10 +719,26 @@ function FlowEditor() {
           setNodes(flow.nodes);
           setEdges(flow.edges);
           setHighlightedTargetId(null);
+          setIsLocked(true);
         }
         if (flow && flow.settings) {
           if (flow.settings.light) setTimeout(() => setLightTheme({ ...defaultLightTheme, ...flow.settings.light }), 0);
           if (flow.settings.dark) setTimeout(() => setDarkTheme({ ...defaultDarkTheme, ...flow.settings.dark }), 0);
+        }
+        if (flow && flow.metadata) {
+          setTimeout(() => {
+            setFlowTitle(flow.metadata.title || '');
+            setFlowAuthor(flow.metadata.author || '');
+          }, 0);
+        }
+        if (flow && flow.metadata) {
+          setTimeout(() => {
+            setFlowTitle(flow.metadata.title || '');
+            setFlowAuthor(flow.metadata.author || '');
+          }, 0);
+        } else {
+          setFlowTitle('');
+          setFlowAuthor('');
         }
       } catch (err) {
         alert("Error parsing JSON file");
@@ -673,6 +747,37 @@ function FlowEditor() {
     };
     reader.readAsText(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const loadFlowFromUrl = async (filename: string) => {
+    try {
+      const res = await fetch(`/flows/${filename}`);
+      const content = await res.text();
+      const flow = JSON.parse(content);
+      if (flow && flow.nodes && flow.edges) {
+        triggerSnapshot(true);
+        setNodes(flow.nodes);
+        setEdges(flow.edges);
+        setHighlightedTargetId(null);
+      }
+      if (flow && flow.settings) {
+        if (flow.settings.light) setTimeout(() => setLightTheme({ ...defaultLightTheme, ...flow.settings.light }), 0);
+        if (flow.settings.dark) setTimeout(() => setDarkTheme({ ...defaultDarkTheme, ...flow.settings.dark }), 0);
+      }
+      if (flow && flow.metadata) {
+        setTimeout(() => {
+          setFlowTitle(flow.metadata.title || '');
+          setFlowAuthor(flow.metadata.author || '');
+        }, 0);
+      } else {
+        setFlowTitle('');
+        setFlowAuthor('');
+      }
+      setShowFlowBrowser(false);
+    } catch (err) {
+      alert("Error loading flow from server");
+      console.error(err);
+    }
   };
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
@@ -700,11 +805,12 @@ function FlowEditor() {
           ...edge.data,
           onDelete: handleDeleteEdge,
           isHighlighted: highlightedEdgeIds.has(edge.id),
+          isLocked,
           isBlurred
         }
       };
     });
-  }, [edges, handleDeleteEdge, highlightedEdgeIds, isSpoilerMode, revealedNodeIds]);
+  }, [edges, handleDeleteEdge, highlightedEdgeIds, isSpoilerMode, revealedNodeIds, isLocked]);
 
   return (
     <>
@@ -722,6 +828,7 @@ function FlowEditor() {
           --outcome-bad-color: ${activeTheme.outcomeBadColor};
           --outcome-neutral-color: ${activeTheme.outcomeNeutralColor};
           --path-highlight-color: ${activeTheme.pathHighlightColor || '#22d3ee'};
+          --path-color: ${activeTheme.pathColor || (isDarkMode ? '#4b5563' : '#94a3b8')};
         }
 
         .custom-font-family {
@@ -746,6 +853,10 @@ function FlowEditor() {
           onPaneClick={onPaneClick}
           onPaneContextMenu={onPaneContextMenu}
           onNodeContextMenu={onNodeContextMenu}
+          nodesDraggable={!isLocked}
+          nodesConnectable={!isLocked}
+          elementsSelectable={!isLocked}
+          edgesFocusable={!isLocked}
           onNodeClick={onNodeClick}
           onNodeDragStart={onNodeDragStart}
           nodeTypes={nodeTypes}
@@ -766,6 +877,7 @@ function FlowEditor() {
           {activeTheme.logoUrl && (
              <Panel position="top-left" className="pointer-events-none opacity-90 m-6">
                 <img
+                  key={activeTheme.logoUrl}
                   src={activeTheme.logoUrl}
                   alt="VN Logo"
                   className="max-h-32 object-contain drop-shadow-xl"
@@ -775,8 +887,7 @@ function FlowEditor() {
           )}
 
           <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 flex flex-col gap-2 w-48 transition-colors">
-            <div className="flex justify-between items-center mb-1">
-              <h3 className="font-bold text-sm text-gray-700 dark:text-gray-200">Add Nodes</h3>
+            <div className="flex justify-center items-center mb-2 w-full">
               <div className="flex gap-1">
                 <button
                   onClick={() => { setShowEndings(!showEndings); setShowSettings(false); }}
@@ -786,9 +897,17 @@ function FlowEditor() {
                   <List size={14} />
                 </button>
                 <button
+                  onClick={() => { setIsLocked(!isLocked); setShowSettings(false); }}
+                  className={`p-1 rounded-full transition ${isLocked ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
+                  title={isLocked ? "Unlock Canvas" : "Lock Canvas (Read-Only)"}
+                >
+                  {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
+                </button>
+                <button
                   onClick={() => { setShowSettings(!showSettings); setShowEndings(false); }}
-                  className={`p-1 rounded-full transition ${showSettings ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
-                  title="Visual Settings"
+                  disabled={isLocked}
+                  className={`p-1 rounded-full transition ${showSettings ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                  title={isLocked ? "Unlock Canvas to Edit Settings" : "Visual Settings"}
                 >
                   <Settings size={14} />
                 </button>
@@ -811,6 +930,8 @@ function FlowEditor() {
                 </button>
               </div>
             </div>
+
+            <h3 className="font-bold text-sm text-gray-700 dark:text-gray-200 border-b border-gray-100 dark:border-gray-700 pb-1 mt-1">Add Nodes</h3>
             <button onClick={() => addNode('decision')} className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded text-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition text-left" style={{ borderColor: 'var(--decision-color)', color: 'var(--decision-color)' }}>Decision</button>
             <button onClick={() => addNode('text')} className="px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800 rounded text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition text-left" style={{ borderColor: 'var(--note-color)', color: 'var(--note-color)' }}>Note / Event</button>
             <button onClick={() => addNode('outcome')} className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-sm hover:bg-purple-100 dark:hover:bg-purple-900/50 transition text-left" style={{ borderColor: 'var(--outcome-neutral-color)', color: 'var(--outcome-neutral-color)' }}>Outcome</button>
@@ -822,7 +943,7 @@ function FlowEditor() {
             <div className="flex gap-2">
               <button
                 onClick={undo}
-                disabled={past.length === 0}
+                disabled={isLocked || past.length === 0}
                 className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition flex justify-center items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Undo (Ctrl+Z)"
               >
@@ -830,7 +951,7 @@ function FlowEditor() {
               </button>
               <button
                 onClick={redo}
-                disabled={future.length === 0}
+                disabled={isLocked || future.length === 0}
                 className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition flex justify-center items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Redo (Ctrl+Shift+Z)"
               >
@@ -838,21 +959,28 @@ function FlowEditor() {
               </button>
             </div>
 
-            <button onClick={() => onLayout('TB')} className="w-full px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded text-sm hover:bg-gray-700 dark:hover:bg-gray-600 transition">Auto Layout Tree</button>
+            <button onClick={() => onLayout('TB')} disabled={isLocked} className="w-full px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded text-sm hover:bg-gray-700 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed">Auto Layout Tree</button>
             <button onClick={centerOnStart} className="w-full px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition flex items-center justify-center gap-2">
               <LocateFixed size={14} /> Locate Start
             </button>
 
             <hr className="my-1 border-gray-100 dark:border-gray-700" />
-            <button onClick={startFromScratch} className="w-full px-3 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded text-sm hover:bg-red-100 dark:hover:bg-red-900/50 transition flex items-center justify-center gap-2 font-semibold">
+            <button onClick={startFromScratch} disabled={isLocked} className="w-full px-3 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded text-sm hover:bg-red-100 dark:hover:bg-red-900/50 transition flex items-center justify-center gap-2 font-semibold">
               <FilePlus size={14} /> New Flow
             </button>
 
             <div className="flex gap-2 mt-1">
+               <button
+                  onClick={() => setShowFlowBrowser(true)}
+                  title="Browse Flows"
+                  className="flex-1 flex justify-center items-center py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition"
+               >
+                  <FolderOpen size={16} />
+               </button>
                <button onClick={onExport} title="Export JSON" className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
                   <Download size={16} />
                </button>
-               <button onClick={() => fileInputRef.current?.click()} title="Import JSON" className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+               <button onClick={() => !isLocked && fileInputRef.current?.click()} title={isLocked ? "Unlock to Import JSON" : "Import JSON"} className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
                   <Upload size={16} />
                </button>
                <input type="file" ref={fileInputRef} onChange={onImport} accept=".json" className="hidden" />
@@ -937,6 +1065,18 @@ function FlowEditor() {
               </div>
 
               <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100 dark:border-gray-700">
+                  <input
+                    type="checkbox"
+                    id="syncSettings"
+                    checked={syncSharedSettings}
+                    onChange={(e) => setSyncSharedSettings(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="syncSettings" className="text-xs text-gray-600 dark:text-gray-300 select-none cursor-pointer">
+                    Sync Logo & Font between themes
+                  </label>
+                </div>
                 <SettingRow label="Logo URL" settingKey="logoUrl" type="text" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Google Font" settingKey="fontFamily" type="text" list="fonts" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <datalist id="fonts">
@@ -945,9 +1085,20 @@ function FlowEditor() {
               </div>
 
               <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <div className="flex justify-between items-center group/row">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Title</label>
+                  <input type="text" value={flowTitle} onChange={(e) => setFlowTitle(e.target.value)} placeholder="Untitled Flow" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
+                </div>
+                <div className="flex justify-between items-center group/row">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Author</label>
+                  <input type="text" value={flowAuthor} onChange={(e) => setFlowAuthor(e.target.value)} placeholder="Anonymous" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                 <SettingRow label="Canvas Bg" settingKey="canvasBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Text Box Bg" settingKey="textBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Text Color" settingKey="textColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Path Default" settingKey="pathColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <SettingRow label="Path Glow" settingKey="pathHighlightColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
               </div>
 
@@ -972,6 +1123,99 @@ function FlowEditor() {
 
         </ReactFlow>
 
+
+        {showFlowBrowser && (
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+              <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950">
+                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2"><FolderOpen /> Browse Flows</h2>
+                <button onClick={() => setShowFlowBrowser(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors"><XIcon size={20} className="text-gray-500" /></button>
+              </div>
+
+              <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row gap-4 items-center bg-white dark:bg-gray-900">
+                <input
+                  type="text"
+                  placeholder="Search by title or author..."
+                  className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 dark:text-gray-100"
+                  value={flowsSearch}
+                  onChange={(e) => setFlowsSearch(e.target.value)}
+                />
+                <select
+                  className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 dark:text-gray-100 cursor-pointer"
+                  value={flowsSort}
+                  onChange={(e) => setFlowsSort(e.target.value as 'title' | 'date' | 'author' | 'nodes')}
+                >
+                  <option value="date">Sort by Date</option>
+                  <option value="title">Sort by Title</option>
+                  <option value="author">Sort by Author</option>
+                  <option value="nodes">Sort by Size (Nodes)</option>
+                </select>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50/50 dark:bg-gray-900/50">
+                {flowsLoading ? (
+                  <div className="flex justify-center items-center h-full text-gray-500">Loading flows...</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {flowsList
+                      .filter(f =>
+                        f.title.toLowerCase().includes(flowsSearch.toLowerCase()) ||
+                        f.author.toLowerCase().includes(flowsSearch.toLowerCase())
+                      )
+                      .sort((a, b) => {
+                        if (flowsSort === 'title') return a.title.localeCompare(b.title);
+                        if (flowsSort === 'author') return a.author.localeCompare(b.author);
+                        if (flowsSort === 'nodes') return b.nodeCount - a.nodeCount;
+                        // Date sorting (newest first), push null timestamps to bottom
+                        if (!a.timestamp) return 1;
+                        if (!b.timestamp) return -1;
+                        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+                      })
+                      .map((flow, i) => (
+                        <div
+                          key={i}
+                          className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col"
+                          onClick={() => loadFlowFromUrl(flow.filename)}
+                        >
+                          <div
+                            className="h-32 w-full border-b border-gray-100 dark:border-gray-700 transition-colors flex items-center justify-center relative overflow-hidden"
+                            style={{ backgroundColor: flow.canvasBg || '#f3f4f6' }}
+                          >
+                            {flow.logoUrl && (
+                               <img
+                                 src={flow.logoUrl}
+                                 alt="Flow Logo"
+                                 className="max-h-24 max-w-[80%] object-contain drop-shadow-md z-10"
+                                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                               />
+                            )}
+                          </div>
+                          <div className="p-4 flex-1 flex flex-col">
+                            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-1" title={flow.title}>{flow.title}</h3>
+                            <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 mb-3">
+                              <User size={12} /> <span className="truncate">{flow.author}</span>
+                            </div>
+                            <div className="mt-auto flex justify-between items-center text-xs text-gray-500 dark:text-gray-500 pt-3 border-t border-gray-100 dark:border-gray-700/50">
+                              <span className="flex items-center gap-1"><FileText size={12} /> {flow.nodeCount} nodes</span>
+                              {flow.timestamp && (
+                                <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(flow.timestamp).toLocaleDateString()}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                    {flowsList.length === 0 && !flowsLoading && (
+                      <div className="col-span-full text-center text-gray-500 py-12">
+                        No flows found in the directory. Export a flow and place the JSON in the <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">public/flows</code> folder.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         {menu.show && (
           <div
             className="absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-md py-2 z-50 flex flex-col min-w-40"

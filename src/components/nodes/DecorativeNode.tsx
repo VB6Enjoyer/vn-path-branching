@@ -34,20 +34,23 @@ export function DecorativeNode({ data, id, selected }: NodeProps) {
   };
 
   const isBlurred = !!data.isBlurred;
+  const isLocked = !!data.isLocked;
 
   return (
     <div className={`relative group ${isBlurred ? 'blur-md pointer-events-none' : ''}`}>
-      <NodeResizer
-        color="var(--path-highlight-color)"
-        isVisible={selected}
-        minWidth={100}
-        minHeight={100}
-      />
+      {!isLocked && (
+        <NodeResizer
+          color="var(--path-highlight-color)"
+          isVisible={selected}
+          minWidth={100}
+          minHeight={100}
+        />
+      )}
 
       {mediaUrl && !showInput ? (
         <div
           className="w-full h-full min-w-[100px] min-h-[100px] flex items-center justify-center rounded-lg overflow-hidden border-2 border-transparent hover:border-dashed hover:border-gray-400 dark:hover:border-gray-600 transition-colors"
-          onDoubleClick={() => setShowInput(true)}
+          onDoubleClick={() => !isLocked && setShowInput(true)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -101,7 +104,7 @@ export function DecorativeNode({ data, id, selected }: NodeProps) {
 
       {/* Delete button (visible when selected or hovered) */}
       <div
-        className={`absolute -top-3 -right-3 opacity-0 group-hover:opacity-100 ${selected ? 'opacity-100' : ''} transition-opacity z-10`}
+        className={`absolute -top-3 -right-3 opacity-0 group-hover:opacity-100 ${selected ? 'opacity-100' : ''} transition-opacity z-10 ${isLocked ? 'hidden' : ''}`}
       >
         <button
           className="bg-white dark:bg-gray-800 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full p-1.5 shadow border border-red-100 dark:border-red-900 transition-colors"

@@ -67,6 +67,7 @@ export function TextNode({ data, id, selected }: NodeProps) {
   const isYouTube = (url: string) => getYouTubeId(url) !== null;
 
   const isHighlighted = !!data.isHighlighted;
+  const isLocked = !!data.isLocked;
   const isBlurred = !!data.isBlurred;
   const borderColor = isHighlighted ? 'var(--path-highlight-color)' : 'var(--note-color)';
   const boxShadow = isHighlighted ? '0 0 15px var(--path-highlight-color)' : undefined;
@@ -106,7 +107,7 @@ export function TextNode({ data, id, selected }: NodeProps) {
             </button>
             <button
               onClick={handleDelete}
-              className="hover:text-red-300 hover:opacity-80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+
               title="Delete Node (Shift+Click to bypass confirm)"
             >
               <Trash2 size={12} />
@@ -172,8 +173,8 @@ export function TextNode({ data, id, selected }: NodeProps) {
               className="w-full h-full text-sm p-2 bg-transparent border-none focus:ring-0 resize-none nodrag"
               style={{ color: 'var(--text-color)' }}
               rows={mediaUrl ? 2 : 3}
-              value={content}
-              onChange={(e) => updateContent(e.target.value)}
+              value={content} readOnly={isLocked}
+              onChange={(e) => !isLocked && updateContent(e.target.value)}
               placeholder="Enter text..."
             />
           </div>

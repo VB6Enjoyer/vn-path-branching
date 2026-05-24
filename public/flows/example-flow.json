@@ -1,0 +1,11 @@
+{
+  "nodes": [
+    {
+      "id": "start",
+      "type": "decision",
+      "position": { "x": 400, "y": 100 },
+      "data": { "prompt": "The story begins...", "choices": ["Choice 1", "Choice 2"] }
+    }
+  ],
+  "edges": []
+}
