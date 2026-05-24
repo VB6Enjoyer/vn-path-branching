@@ -3,7 +3,7 @@ import re
 with open('src/utils/layout.ts', 'r') as f:
     content = f.read()
 
-replacement = """  const sortedEdges = [...edges].sort((a, b) => {
+replacement = r"""  const sortedEdges = [...edges].sort((a, b) => {
     // 1. Group edges by source node
     if (a.source === b.source) {
       // 2. If they have different source handles (e.g. choice-0 vs choice-1),

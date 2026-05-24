@@ -24,18 +24,37 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
   // based on the sourceHandle index before passing them to dagre.
   // Dagre respects the order in which edges are added.
   const sortedEdges = [...edges].sort((a, b) => {
-    if (a.source === b.source && a.sourceHandle && b.sourceHandle) {
-       const indexA = parseInt(a.sourceHandle.replace('choice-', ''), 10);
-       const indexB = parseInt(b.sourceHandle.replace('choice-', ''), 10);
-       if (!isNaN(indexA) && !isNaN(indexB)) {
-         return indexA - indexB;
-       }
+    // 1. Group edges by source node
+    if (a.source === b.source) {
+      // 2. If they have different source handles (e.g. choice-0 vs choice-1),
+      // order them based on the numerical index of the choice.
+      const getHandleIndex = (handle: string | null | undefined) => {
+        if (!handle) return 0;
+        const match = handle.match(/\d+/);
+        return match ? parseInt(match[0], 10) : 0;
+      };
+
+      const indexA = getHandleIndex(a.sourceHandle);
+      const indexB = getHandleIndex(b.sourceHandle);
+
+      if (indexA !== indexB) {
+        return indexA - indexB;
+      }
+
+      // 3. If they share the same source handle (e.g. an event node splitting into two paths),
+      // order them deterministically to avoid random crossings.
+      return a.target.localeCompare(b.target);
     }
-    return 0;
+
+    // Group edges by their source ID string
+    return a.source.localeCompare(b.source);
   });
 
+  // Assign edge weights. Stronger weights force dagre to keep nodes closer and aligned.
   sortedEdges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
+    // We pass weight: 1, but by adding them in order, dagre usually respects the initial insertion
+    // order for siblings.
+    dagreGraph.setEdge(edge.source, edge.target, { weight: 1 });
   });
 
   dagre.layout(dagreGraph);
