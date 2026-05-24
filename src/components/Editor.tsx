@@ -1103,6 +1103,8 @@ function FlowEditor() {
               <div className="flex flex-col gap-2">
                 {(() => {
                   const issues = nodes.map(node => {
+                    if (node.type === 'image') return null;
+
                     const incoming = edges.filter(e => e.target === node.id);
                     const outgoing = edges.filter(e => e.source === node.id);
 
@@ -1412,13 +1414,13 @@ function FlowEditor() {
             ) : (
               <>
                 <div className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase border-b border-gray-100 dark:border-gray-700 mb-1">Node Actions</div>
-                {menu.targetNode?.type === 'decision' && (
+                {!isLocked && menu.targetNode?.type === 'decision' && (
                   <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400" onClick={() => handleMenuNodeAction('add_choice')}>
                     <Plus size={14} /> Add Choice
                   </button>
                 )}
 
-                {(menu.targetNode?.type === 'decision' || (menu.targetNode?.type === 'text' && menu.targetNode.data?.mediaUrl)) && (
+                {!isLocked && (menu.targetNode?.type === 'decision' || (menu.targetNode?.type === 'text' && menu.targetNode.data?.mediaUrl)) && (
                   <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => handleMenuNodeAction('toggle_text')}>
                     <EyeOff size={14} /> Toggle Text Visibility
                   </button>
@@ -1434,9 +1436,11 @@ function FlowEditor() {
                   </button>
                 )}
 
-                <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => handleMenuNodeAction('delete')}>
-                  <Trash2 size={14} /> Delete Node
-                </button>
+                {!isLocked && (
+                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => handleMenuNodeAction('delete')}>
+                    <Trash2 size={14} /> Delete Node
+                  </button>
+                )}
               </>
             )}
           </div>
