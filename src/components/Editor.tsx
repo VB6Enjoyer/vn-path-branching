@@ -887,8 +887,7 @@ function FlowEditor() {
           )}
 
           <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 flex flex-col gap-2 w-48 transition-colors">
-            <div className="flex justify-between items-center mb-1">
-              <h3 className="font-bold text-sm text-gray-700 dark:text-gray-200">Add Nodes</h3>
+            <div className="flex justify-center items-center mb-2 w-full">
               <div className="flex gap-1">
                 <button
                   onClick={() => { setShowEndings(!showEndings); setShowSettings(false); }}
@@ -931,6 +930,8 @@ function FlowEditor() {
                 </button>
               </div>
             </div>
+
+            <h3 className="font-bold text-sm text-gray-700 dark:text-gray-200 border-b border-gray-100 dark:border-gray-700 pb-1 mt-1">Add Nodes</h3>
             <button onClick={() => addNode('decision')} className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded text-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition text-left" style={{ borderColor: 'var(--decision-color)', color: 'var(--decision-color)' }}>Decision</button>
             <button onClick={() => addNode('text')} className="px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800 rounded text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition text-left" style={{ borderColor: 'var(--note-color)', color: 'var(--note-color)' }}>Note / Event</button>
             <button onClick={() => addNode('outcome')} className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-sm hover:bg-purple-100 dark:hover:bg-purple-900/50 transition text-left" style={{ borderColor: 'var(--outcome-neutral-color)', color: 'var(--outcome-neutral-color)' }}>Outcome</button>
