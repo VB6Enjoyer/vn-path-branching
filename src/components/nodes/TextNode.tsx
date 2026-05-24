@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps, NodeResizer } from '@xyflow/react';
 import { Trash2, Image as ImageIcon, Check, Pencil, X, Eye, EyeOff } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import remarkGfm from 'remark-gfm';
+
 
 export function TextNode({ data, id, selected }: NodeProps) {
   const [content, setContent] = useState<string>((data.content as string) || 'Note or context...');
@@ -9,6 +13,7 @@ export function TextNode({ data, id, selected }: NodeProps) {
   const [showMediaInput, setShowMediaInput] = useState<boolean>(false);
   const [isFullscreenPreview, setIsFullscreenPreview] = useState<boolean>(false);
   const [isTextHidden, setIsTextHidden] = useState<boolean>((data.isTextHidden as boolean) || false);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof data.content === 'string') setTimeout(() => setContent(data.content as string), 0);
@@ -169,14 +174,30 @@ export function TextNode({ data, id, selected }: NodeProps) {
 
         {!isTextHidden && (
           <div className="p-2 w-full flex-none">
-            <textarea
-              className="w-full h-full text-sm p-2 bg-transparent border-none focus:ring-0 resize-none nodrag"
-              style={{ color: 'var(--text-color)' }}
-              rows={mediaUrl ? 2 : 3}
-              value={content} readOnly={isLocked}
-              onChange={(e) => !isLocked && updateContent(e.target.value)}
-              placeholder="Enter text..."
-            />
+            {isEditing && !isLocked ? (
+              <textarea
+                className="w-full h-full text-sm p-2 bg-transparent border-none focus:ring-0 resize-none nodrag"
+                style={{ color: 'var(--text-color)' }}
+                rows={mediaUrl ? 2 : 3}
+                value={content}
+                onChange={(e) => updateContent(e.target.value)}
+                onBlur={() => setIsEditing(false)}
+                onKeyDown={(e) => { if (e.key === 'Escape') setIsEditing(false); }}
+                placeholder="Enter text (Markdown supported)..."
+                autoFocus
+              />
+            ) : (
+              <div
+                className="w-full h-full min-h-[60px] text-sm p-2 nodrag cursor-text prose prose-sm dark:prose-invert max-w-none"
+                style={{ color: 'var(--text-color)' }}
+                onDoubleClick={() => !isLocked && setIsEditing(true)}
+                title={isLocked ? "" : "Double click to edit"}
+              >
+                <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>
+                  {content || '*Empty Note*'}
+                </ReactMarkdown>
+              </div>
+            )}
           </div>
         )}
 

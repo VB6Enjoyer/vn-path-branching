@@ -901,6 +901,14 @@ function FlowEditor() {
           --path-color: ${activeTheme.pathColor || (isDarkMode ? '#4b5563' : '#94a3b8')};
         }
 
+
+        .prose strong { font-weight: bold; }
+        .prose em { font-style: italic; }
+        .prose u { text-decoration: underline; }
+        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-top: 0.5em; margin-bottom: 0.5em; }
+        .prose ol { list-style-type: decimal; padding-left: 1.5rem; margin-top: 0.5em; margin-bottom: 0.5em; }
+        .prose a { color: #3b82f6; text-decoration: underline; }
+        .prose p { margin-top: 0.2em; margin-bottom: 0.2em; }
         .custom-font-family {
           font-family: var(--custom-font) !important;
         }
@@ -958,7 +966,7 @@ function FlowEditor() {
 
           <Panel position="top-right" className="bg-white dark:bg-gray-800 p-2 sm:p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 flex flex-col gap-2 w-auto sm:w-48 transition-colors pointer-events-auto">
             <div className="flex justify-center items-center w-full">
-              <div className="flex flex-wrap gap-1 sm:gap-2 items-center justify-center">
+              <div className="grid grid-cols-3 gap-1 sm:gap-2 items-center justify-items-center">
                 <button
                   onClick={() => setIsMenuCollapsed(!isMenuCollapsed)}
                   className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700 transition sm:hidden`}
@@ -1102,8 +1110,8 @@ function FlowEditor() {
               </div>
               <div className="flex flex-col gap-2">
                 {(() => {
-                  const issues = nodes.map(node => {
-                    if (node.type === 'image') return null;
+                  const issues = nodes.flatMap(node => {
+                    if (node.type === 'image') return [];
 
                     const incoming = edges.filter(e => e.target === node.id);
                     const outgoing = edges.filter(e => e.source === node.id);
@@ -1115,13 +1123,28 @@ function FlowEditor() {
                     if (node.type === 'decision') label = (node.data.prompt as string) || 'Decision Node';
                     if (node.type === 'text') label = (node.data.content as string) || 'Text Node';
                     if (node.type === 'outcome') label = (node.data.outcome as string) || 'Outcome Node';
-                    if (node.type === 'image') label = 'Decorative Image';
 
-                    if (isOrphan && isDeadEnd) return { node, type: 'orphan-deadend', label };
-                    if (isOrphan) return { node, type: 'orphan', label };
-                    if (isDeadEnd) return { node, type: 'dead-end', label };
-                    return null;
-                  }).filter(Boolean) as { node: Node, type: string, label: string }[];
+                    const nodeIssues = [];
+
+                    if (isOrphan && isDeadEnd) {
+                      nodeIssues.push({ node, type: 'orphan-deadend', label });
+                    } else {
+                      if (isOrphan) nodeIssues.push({ node, type: 'orphan', label });
+                      if (isDeadEnd) nodeIssues.push({ node, type: 'dead-end', label });
+                    }
+
+                    // Check for unconnected choices inside a decision node
+                    if (node.type === 'decision' && Array.isArray(node.data.choices)) {
+                      node.data.choices.forEach((choice, index) => {
+                        const hasConnection = outgoing.some(e => e.sourceHandle === `choice-${index}`);
+                        if (!hasConnection) {
+                           nodeIssues.push({ node, type: 'unconnected-choice', label: `Unconnected Choice: "${choice}" in ${label}` });
+                        }
+                      });
+                    }
+
+                    return nodeIssues;
+                  });
 
                   if (issues.length === 0) {
                     return (
@@ -1138,7 +1161,7 @@ function FlowEditor() {
                       <div className="flex justify-between items-start gap-2">
                         <div className="flex flex-col overflow-hidden">
                           <span className="text-xs font-bold uppercase text-orange-600 dark:text-orange-400">
-                            {issue.type === 'orphan' ? 'Orphaned Node' : issue.type === 'dead-end' ? 'Dead End' : 'Orphan & Dead End'}
+                            {issue.type === 'orphan' ? 'Orphaned Node' : issue.type === 'dead-end' ? 'Dead End' : issue.type === 'unconnected-choice' ? 'Missing Connection' : 'Orphan & Dead End'}
                           </span>
                           <span className="text-sm text-gray-800 dark:text-gray-200 truncate mt-0.5">
                             {issue.label}
