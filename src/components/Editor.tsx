@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock, ChevronUp, ChevronDown } from 'lucide-react';
 import debounce from 'lodash.debounce';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode } from './nodes';
@@ -89,7 +89,7 @@ const SettingRow = ({
           list={list}
           value={activeTheme[settingKey] || ''}
           onChange={(e) => updateActiveTheme(settingKey, e.target.value)}
-          className={type === 'color' ? "w-8 h-8 rounded cursor-pointer border-0 p-0" : "w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"}
+          className={type === 'color' ? "w-8 h-8 rounded cursor-pointer border-0 p-0" : "w-28 text-xs p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"}
         />
 
 
@@ -157,6 +157,28 @@ function FlowEditor() {
   const [flowAuthor, setFlowAuthor] = useState<string>('');
   const [syncSharedSettings, setSyncSharedSettings] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
+  const [isMenuCollapsed, setIsMenuCollapsed] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+
+    // Initial responsive setup
+    if (window.innerWidth < 1024) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsMenuCollapsed(true);
+    }
+    if (window.innerWidth < 640) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsLocked(true);
+    }
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth < 640;
+
 
   const activeTheme = isDarkMode ? darkTheme : lightTheme;
   const activeDefaultTheme = isDarkMode ? defaultDarkTheme : defaultLightTheme;
@@ -556,7 +578,7 @@ function FlowEditor() {
 
   const onNodeContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent, node: Node) => {
-      if (isLocked || event.shiftKey) return;
+      if (event.shiftKey) return;
       event.preventDefault();
 
       if (reactFlowWrapper.current) {
@@ -867,7 +889,7 @@ function FlowEditor() {
         >
           <Background gap={12} size={1} color={isDarkMode ? '#374151' : '#cbd5e1'} />
           <Controls className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" />
-          <MiniMap
+          <MiniMap className="hidden sm:block"
             nodeColor={isDarkMode ? '#4b5563' : '#e2e8f0'}
             maskColor={isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)'}
             style={{ backgroundColor: isDarkMode ? '#1f2937' : '#ffffff' }}
@@ -880,110 +902,132 @@ function FlowEditor() {
                   key={activeTheme.logoUrl}
                   src={activeTheme.logoUrl}
                   alt="VN Logo"
-                  className="max-h-32 object-contain drop-shadow-xl"
+                  className="max-h-16 sm:max-h-24 md:max-h-32 object-contain drop-shadow-xl transition-all duration-300"
                   onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                 />
              </Panel>
           )}
 
-          <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 flex flex-col gap-2 w-48 transition-colors">
-            <div className="flex justify-center items-center mb-2 w-full">
-              <div className="flex gap-1">
+          <Panel position="top-right" className="bg-white dark:bg-gray-800 p-2 sm:p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 flex flex-col gap-2 w-auto sm:w-48 transition-colors pointer-events-auto">
+            <div className="flex justify-center items-center w-full">
+              <div className="flex flex-wrap gap-1 sm:gap-2 items-center justify-center">
+                <button
+                  onClick={() => setIsMenuCollapsed(!isMenuCollapsed)}
+                  className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700 transition sm:hidden`}
+                  title="Toggle Menu"
+                >
+                  {isMenuCollapsed ? <ChevronDown size={18} className="sm:w-[14px] sm:h-[14px]" /> : <ChevronUp size={18} className="sm:w-[14px] sm:h-[14px]" />}
+                </button>
                 <button
                   onClick={() => { setShowEndings(!showEndings); setShowSettings(false); }}
-                  className={`p-1 rounded-full transition ${showEndings ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
+                  className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full transition ${showEndings ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
                   title="View Endings"
                 >
-                  <List size={14} />
+                  <List size={18} className="sm:w-[14px] sm:h-[14px]" />
                 </button>
                 <button
                   onClick={() => { setIsLocked(!isLocked); setShowSettings(false); }}
-                  className={`p-1 rounded-full transition ${isLocked ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
+                  className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full transition ${isLocked ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
                   title={isLocked ? "Unlock Canvas" : "Lock Canvas (Read-Only)"}
                 >
-                  {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
+                  {isLocked ? <Lock size={18} className="sm:w-[14px] sm:h-[14px]" /> : <Unlock size={18} className="sm:w-[14px] sm:h-[14px]" />}
                 </button>
-                <button
-                  onClick={() => { setShowSettings(!showSettings); setShowEndings(false); }}
-                  disabled={isLocked}
-                  className={`p-1 rounded-full transition ${showSettings ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
-                  title={isLocked ? "Unlock Canvas to Edit Settings" : "Visual Settings"}
-                >
-                  <Settings size={14} />
-                </button>
+                {!isMobile && (
+                  <button
+                    onClick={() => { setShowSettings(!showSettings); setShowEndings(false); }}
+                    disabled={isLocked}
+                    className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full transition ${showSettings ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    title={isLocked ? "Unlock Canvas to Edit Settings" : "Visual Settings"}
+                  >
+                    <Settings size={18} className="sm:w-[14px] sm:h-[14px]" />
+                  </button>
+                )}
                 <button
                   onClick={() => {
                      setIsSpoilerMode(!isSpoilerMode);
                      if (isSpoilerMode) setRevealedNodeIds(new Set()); // Reset on disable
                   }}
-                  className={`p-1 rounded-full transition ${isSpoilerMode ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
+                  className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full transition ${isSpoilerMode ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
                   title="Toggle Spoiler Mode"
                 >
-                  <EyeClosed size={14} />
+                  <EyeClosed size={18} className="sm:w-[14px] sm:h-[14px]" />
                 </button>
                 <button
                   onClick={toggleTheme}
-                  className="p-1 rounded-full text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700 transition"
+                  className="p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700 transition"
                   title="Toggle Dark Mode"
                 >
-                  {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
+                  {isDarkMode ? <Sun size={18} className="sm:w-[14px] sm:h-[14px]" /> : <Moon size={18} className="sm:w-[14px] sm:h-[14px]" />}
                 </button>
               </div>
             </div>
 
-            <h3 className="font-bold text-sm text-gray-700 dark:text-gray-200 border-b border-gray-100 dark:border-gray-700 pb-1 mt-1">Add Nodes</h3>
-            <button onClick={() => addNode('decision')} className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded text-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition text-left" style={{ borderColor: 'var(--decision-color)', color: 'var(--decision-color)' }}>Decision</button>
-            <button onClick={() => addNode('text')} className="px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800 rounded text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition text-left" style={{ borderColor: 'var(--note-color)', color: 'var(--note-color)' }}>Note / Event</button>
-            <button onClick={() => addNode('outcome')} className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-sm hover:bg-purple-100 dark:hover:bg-purple-900/50 transition text-left" style={{ borderColor: 'var(--outcome-neutral-color)', color: 'var(--outcome-neutral-color)' }}>Outcome</button>
+            <div className={`flex flex-col gap-2 transition-all ${isMenuCollapsed ? 'hidden sm:flex' : 'flex'}`}>
+              {!isMobile && (
+                <>
+                  <h3 className="font-bold text-sm text-gray-700 dark:text-gray-200 border-b border-gray-100 dark:border-gray-700 pb-1 mt-1">Add Nodes</h3>
+                  <button onClick={() => addNode('decision')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded text-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
+                    <Plus size={18} className="sm:w-[14px] sm:h-[14px]" /> Decision
+                  </button>
+                  <button onClick={() => addNode('text')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800 rounded text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
+                    <FilePlus size={18} className="sm:w-[14px] sm:h-[14px]" /> Note / Event
+                  </button>
+                  <button onClick={() => addNode('outcome')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-sm hover:bg-purple-100 dark:hover:bg-purple-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
+                    <Waypoints size={18} className="sm:w-[14px] sm:h-[14px]" /> Outcome
+                  </button>
 
-            <hr className="my-1 border-gray-100 dark:border-gray-700" />
+                  <hr className="my-1 border-gray-100 dark:border-gray-700" />
 
-            <h3 className="font-bold text-sm mb-1 text-gray-700 dark:text-gray-200">Actions</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={undo}
+                      disabled={isLocked || past.length === 0}
+                      className="flex-1 py-2 sm:py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition flex justify-center items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0"
+                      title="Undo (Ctrl+Z)"
+                    >
+                      <Undo2 size={18} className="sm:w-[14px] sm:h-[14px]" />
+                    </button>
+                    <button
+                      onClick={redo}
+                      disabled={isLocked || future.length === 0}
+                      className="flex-1 py-2 sm:py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition flex justify-center items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0"
+                      title="Redo (Ctrl+Shift+Z)"
+                    >
+                      <Redo2 size={18} className="sm:w-[14px] sm:h-[14px]" />
+                    </button>
+                  </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={undo}
-                disabled={isLocked || past.length === 0}
-                className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition flex justify-center items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Undo (Ctrl+Z)"
-              >
-                <Undo2 size={14} />
+                  <button onClick={() => onLayout('TB')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded text-sm hover:bg-gray-700 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">Auto Layout Tree</button>
+
+                  <hr className="my-1 border-gray-100 dark:border-gray-700" />
+                  <button onClick={startFromScratch} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded text-sm hover:bg-red-100 dark:hover:bg-red-900/50 transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">New Flow</button>
+                </>
+              )}
+
+              <div className="flex gap-2">
+                 <button
+                    onClick={() => setShowFlowBrowser(true)}
+                    title="Browse Flows"
+                    className="flex-1 flex justify-center items-center py-2 sm:py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition min-h-[44px] sm:min-h-0"
+                 >
+                    <FolderOpen size={20} className="sm:w-[16px] sm:h-[16px]" />
+                 </button>
+                 {!isMobile && (
+                   <>
+                     <button onClick={onExport} title="Export JSON" className="flex-1 flex justify-center items-center py-2 sm:py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition min-h-[44px] sm:min-h-0">
+                        <Download size={20} className="sm:w-[16px] sm:h-[16px]" />
+                     </button>
+                     <button onClick={() => !isLocked && fileInputRef.current?.click()} disabled={isLocked} title={isLocked ? "Unlock to Import JSON" : "Import JSON"} className="flex-1 flex justify-center items-center py-2 sm:py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
+                        <Upload size={20} className="sm:w-[16px] sm:h-[16px]" />
+                     </button>
+                     <input type="file" ref={fileInputRef} onChange={onImport} accept=".json" className="hidden" />
+                   </>
+                 )}
+              </div>
+
+              <button onClick={centerOnStart} className="w-full px-3 py-2 sm:py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition flex items-center justify-center gap-2 min-h-[44px] sm:min-h-0">
+                <LocateFixed size={18} className="sm:w-[14px] sm:h-[14px]" /> Locate Start
               </button>
-              <button
-                onClick={redo}
-                disabled={isLocked || future.length === 0}
-                className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition flex justify-center items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Redo (Ctrl+Shift+Z)"
-              >
-                <Redo2 size={14} />
-              </button>
-            </div>
-
-            <button onClick={() => onLayout('TB')} disabled={isLocked} className="w-full px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded text-sm hover:bg-gray-700 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed">Auto Layout Tree</button>
-            <button onClick={centerOnStart} className="w-full px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition flex items-center justify-center gap-2">
-              <LocateFixed size={14} /> Locate Start
-            </button>
-
-            <hr className="my-1 border-gray-100 dark:border-gray-700" />
-            <button onClick={startFromScratch} disabled={isLocked} className="w-full px-3 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded text-sm hover:bg-red-100 dark:hover:bg-red-900/50 transition flex items-center justify-center gap-2 font-semibold">
-              <FilePlus size={14} /> New Flow
-            </button>
-
-            <div className="flex gap-2 mt-1">
-               <button
-                  onClick={() => setShowFlowBrowser(true)}
-                  title="Browse Flows"
-                  className="flex-1 flex justify-center items-center py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition"
-               >
-                  <FolderOpen size={16} />
-               </button>
-               <button onClick={onExport} title="Export JSON" className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
-                  <Download size={16} />
-               </button>
-               <button onClick={() => !isLocked && fileInputRef.current?.click()} title={isLocked ? "Unlock to Import JSON" : "Import JSON"} className="flex-1 flex justify-center items-center py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
-                  <Upload size={16} />
-               </button>
-               <input type="file" ref={fileInputRef} onChange={onImport} accept=".json" className="hidden" />
             </div>
           </Panel>
 
@@ -1029,9 +1073,9 @@ function FlowEditor() {
                              </span>
                            )}
                         </div>
-                        <div className="flex gap-1 mt-1">
+                        <div className="flex gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center mt-1">
                           <button
-                            className="flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            className="flex-1 flex items-center justify-center gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                             onClick={() => setHighlightedTargetId(node.id)}
                             title="Highlight path to this ending"
                           >
@@ -1064,7 +1108,7 @@ function FlowEditor() {
                 <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
               </div>
 
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center">
                 <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100 dark:border-gray-700">
                   <input
                     type="checkbox"
@@ -1087,11 +1131,11 @@ function FlowEditor() {
               <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                 <div className="flex justify-between items-center group/row">
                   <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Title</label>
-                  <input type="text" value={flowTitle} onChange={(e) => setFlowTitle(e.target.value)} placeholder="Untitled Flow" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
+                  <input type="text" value={flowTitle} onChange={(e) => setFlowTitle(e.target.value)} placeholder="Untitled Flow" className="w-40 text-xs p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
                 </div>
                 <div className="flex justify-between items-center group/row">
                   <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Author</label>
-                  <input type="text" value={flowAuthor} onChange={(e) => setFlowAuthor(e.target.value)} placeholder="Anonymous" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
+                  <input type="text" value={flowAuthor} onChange={(e) => setFlowAuthor(e.target.value)} placeholder="Anonymous" className="w-40 text-xs p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
                 </div>
               </div>
               <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
@@ -1191,14 +1235,14 @@ function FlowEditor() {
                             )}
                           </div>
                           <div className="p-4 flex-1 flex flex-col">
-                            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-1" title={flow.title}>{flow.title}</h3>
-                            <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center" title={flow.title}>{flow.title}</h3>
+                            <div className="flex items-center gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-sm text-gray-600 dark:text-gray-400 mb-3">
                               <User size={12} /> <span className="truncate">{flow.author}</span>
                             </div>
                             <div className="mt-auto flex justify-between items-center text-xs text-gray-500 dark:text-gray-500 pt-3 border-t border-gray-100 dark:border-gray-700/50">
-                              <span className="flex items-center gap-1"><FileText size={12} /> {flow.nodeCount} nodes</span>
+                              <span className="flex items-center gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"><FileText size={12} /> {flow.nodeCount} nodes</span>
                               {flow.timestamp && (
-                                <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(flow.timestamp).toLocaleDateString()}</span>
+                                <span className="flex items-center gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"><Calendar size={12} /> {new Date(flow.timestamp).toLocaleDateString()}</span>
                               )}
                             </div>
                           </div>
