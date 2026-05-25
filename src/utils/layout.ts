@@ -9,8 +9,8 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
   dagreGraph.setGraph({ rankdir: direction, ranksep: 120, nodesep: 80 });
 
   // Separate layout nodes and ignored nodes
-  const layoutNodes = nodes.filter(n => n.type !== 'image');
-  const ignoredNodes = nodes.filter(n => n.type === 'image');
+  const layoutNodes = nodes.filter(n => n.type !== 'image' && n.type !== 'group' && !n.parentId);
+  const ignoredNodes = nodes.filter(n => n.type === 'image' || n.type === 'group' || n.parentId);
 
   layoutNodes.forEach((node) => {
     // If the node has been measured (rendered or resized), use its actual dimensions.

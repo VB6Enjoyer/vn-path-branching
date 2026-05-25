@@ -20,11 +20,11 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock, ChevronUp, ChevronDown, ShieldAlert, ImageDown, Check } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock, ChevronUp, ChevronDown, ShieldAlert, ImageDown, Check, Box } from 'lucide-react';
 import debounce from 'lodash.debounce';
 import { toPng, toSvg } from 'html-to-image';
 
-import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode } from './nodes';
+import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode, GroupNode } from './nodes';
 import { getLayoutedElements } from '../utils/layout';
 import { ThemeSettings, defaultLightTheme, defaultDarkTheme } from '../types';
 
@@ -33,6 +33,7 @@ const nodeTypes = {
   text: TextNode,
   outcome: OutcomeNode,
   image: DecorativeNode,
+  group: GroupNode,
 };
 
 const edgeTypes = {
@@ -621,7 +622,7 @@ function FlowEditor() {
     [nodes, edges, setNodes, setEdges, triggerSnapshot]
   );
 
-  const addNode = (type: 'decision' | 'text' | 'outcome' | 'image', menuX?: number, menuY?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
+  const addNode = (type: 'decision' | 'text' | 'outcome' | 'image' | 'group', menuX?: number, menuY?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
     triggerSnapshot(true);
     let position = { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 100 };
     if (menuX !== undefined && menuY !== undefined && reactFlowWrapper.current) {
@@ -630,14 +631,23 @@ function FlowEditor() {
     }
 
     const id = uuidv4();
+    let data = {};
+    let style = undefined;
+    if (type === 'decision') data = { prompt: 'New Decision', choices: ['Choice A', 'Choice B'] };
+    else if (type === 'text') data = { content: 'New Note' };
+    else if (type === 'image') data = { mediaUrl: '' };
+    else if (type === 'group') {
+      data = { label: 'Group / Route', bgColor: '#808080', bgOpacity: 20, borderColor: '#808080' };
+      style = { width: 400, height: 300 };
+    }
+    else data = { outcome: 'New Ending', type: 'neutral' };
+
     const newNode: Node = {
       id,
       type,
       position,
-      data:
-        type === 'decision' ? { prompt: 'New Decision', choices: ['Choice A', 'Choice B'] } :
-        type === 'text' ? { content: 'New Note' } :
-        { outcome: 'New Ending', type: 'neutral' },
+      data,
+      style
     };
 
     setNodes((nds) => nds.concat(newNode));
@@ -864,6 +874,79 @@ function FlowEditor() {
     triggerSnapshot(true);
   }, [triggerSnapshot]);
 
+  const onNodeDragStop = useCallback((event: React.MouseEvent, node: Node) => {
+    // If we dragged a group, we don't need to reassign its parent.
+    if (node.type === 'group') return;
+
+    setNodes((nds) => {
+      // Find all groups
+      const groups = nds.filter(n => n.type === 'group');
+      if (groups.length === 0) return nds;
+
+      // Calculate absolute position of the dragged node
+      let absX = node.position.x;
+      let absY = node.position.y;
+
+      if (node.parentId) {
+        const parent = nds.find(n => n.id === node.parentId);
+        if (parent) {
+          absX += parent.position.x;
+          absY += parent.position.y;
+        }
+      }
+
+      // Check if the center of the dragged node falls inside any group
+      const nodeCenter = {
+        x: absX + (node.measured?.width || 200) / 2,
+        y: absY + (node.measured?.height || 100) / 2
+      };
+
+      let newParentId: string | undefined = undefined;
+      let relX = absX;
+      let relY = absY;
+
+      // Iterate groups in reverse to pick the top-most one if they overlap
+      for (let i = groups.length - 1; i >= 0; i--) {
+        const g = groups[i];
+        const gWidth = g.style?.width as number || g.measured?.width || 400;
+        const gHeight = g.style?.height as number || g.measured?.height || 300;
+
+        if (
+          nodeCenter.x >= g.position.x &&
+          nodeCenter.x <= g.position.x + gWidth &&
+          nodeCenter.y >= g.position.y &&
+          nodeCenter.y <= g.position.y + gHeight
+        ) {
+          newParentId = g.id;
+          relX = absX - g.position.x;
+          relY = absY - g.position.y;
+          break;
+        }
+      }
+
+      // If parent didn't change, no updates needed to parentId
+      if (node.parentId === newParentId) {
+        return nds;
+      }
+
+      // Return updated nodes
+      return nds.map(n => {
+        if (n.id === node.id) {
+          return {
+            ...n,
+            parentId: newParentId,
+            position: { x: relX, y: relY },
+            // Provide an extent constraint so nodes can't be dragged outside the group bounds easily?
+            // Actually, React Flow natively allows dragging out if extent isn't strictly 'parent'.
+            // We just let them drag out freely, our dragStop logic will un-parent them.
+            extent: newParentId ? 'parent' : undefined
+          };
+        }
+        return n;
+      });
+    });
+  }, [setNodes]);
+
   const handleDeleteEdge = useCallback((edgeId: string) => {
     triggerSnapshot(true);
     setEdges((eds) => eds.filter((e) => e.id !== edgeId));
@@ -936,6 +1019,7 @@ function FlowEditor() {
           onPaneClick={onPaneClick}
           onPaneContextMenu={onPaneContextMenu}
           onNodeContextMenu={onNodeContextMenu}
+          onNodeDragStop={onNodeDragStop}
           nodesDraggable={!isLocked}
           nodesConnectable={!isLocked}
           elementsSelectable={!isLocked}
@@ -1042,6 +1126,9 @@ function FlowEditor() {
                   </button>
                   <button onClick={() => addNode('outcome')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-sm hover:bg-purple-100 dark:hover:bg-purple-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
                     <Waypoints size={18} className="sm:w-[14px] sm:h-[14px]" /> Outcome
+                  </button>
+                  <button onClick={() => addNode('group')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
+                    <Box size={18} className="sm:w-[14px] sm:h-[14px]" /> Group Box
                   </button>
 
                   <hr className="my-1 border-gray-100 dark:border-gray-700" />
