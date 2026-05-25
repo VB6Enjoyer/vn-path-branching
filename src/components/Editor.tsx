@@ -1267,7 +1267,7 @@ function FlowEditor() {
                 <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
               </div>
 
-              <div className="flex flex-col gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center">
+              <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100 dark:border-gray-700">
                   <input
                     type="checkbox"
@@ -1303,11 +1303,11 @@ function FlowEditor() {
               <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                 <div className="flex justify-between items-center group/row">
                   <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Title</label>
-                  <input type="text" value={flowTitle} onChange={(e) => setFlowTitle(e.target.value)} placeholder="Untitled Flow" className="w-40 text-xs p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
+                  <input type="text" value={flowTitle} onChange={(e) => setFlowTitle(e.target.value)} placeholder="Untitled Flow" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
                 </div>
                 <div className="flex justify-between items-center group/row">
                   <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Author</label>
-                  <input type="text" value={flowAuthor} onChange={(e) => setFlowAuthor(e.target.value)} placeholder="Anonymous" className="w-40 text-xs p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
+                  <input type="text" value={flowAuthor} onChange={(e) => setFlowAuthor(e.target.value)} placeholder="Anonymous" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
                 </div>
               </div>
               <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
