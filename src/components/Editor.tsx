@@ -14,12 +14,15 @@ import {
   Node,
   Panel,
   ReactFlowProvider,
-  useReactFlow
+  useReactFlow,
+  getNodesBounds,
+  getViewportForBounds
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock, ChevronUp, ChevronDown } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock, ChevronUp, ChevronDown, ShieldAlert, ImageDown, Check } from 'lucide-react';
 import debounce from 'lodash.debounce';
+import { toPng, toSvg } from 'html-to-image';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode } from './nodes';
 import { getLayoutedElements } from '../utils/layout';
@@ -153,8 +156,10 @@ function FlowEditor() {
   const [flowsSearch, setFlowsSearch] = useState('');
   const [flowsSort, setFlowsSort] = useState<'title' | 'date' | 'author' | 'nodes'>('date');
   const [showEndings, setShowEndings] = useState(false);
+  const [showValidator, setShowValidator] = useState(false);
   const [flowTitle, setFlowTitle] = useState<string>('');
   const [flowAuthor, setFlowAuthor] = useState<string>('');
+  const [snapToGrid, setSnapToGrid] = useState(false);
   const [syncSharedSettings, setSyncSharedSettings] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
   const [isMenuCollapsed, setIsMenuCollapsed] = useState(false);
@@ -342,14 +347,15 @@ function FlowEditor() {
       metadata: {
         title: flowTitle,
         author: flowAuthor,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        snapToGrid
       },
       nodes: getCleanNodes(nodes),
       edges,
       settings: { light: lightTheme, dark: darkTheme }
     };
     localStorage.setItem('brain-map-flow', JSON.stringify(saveObj));
-  }, [nodes, edges, lightTheme, darkTheme, isLoaded, flowTitle, flowAuthor]);
+  }, [nodes, edges, lightTheme, darkTheme, isLoaded, flowTitle, flowAuthor, snapToGrid]);
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
@@ -706,12 +712,57 @@ function FlowEditor() {
     }
   };
 
+  const downloadImage = async (format: 'png' | 'svg') => {
+    // We want to download the entire flow, so we calculate the bounds of all nodes
+    const nodesBounds = getNodesBounds(nodes);
+    // Add padding
+    const padding = 50;
+    const width = nodesBounds.width + padding * 2;
+    const height = nodesBounds.height + padding * 2;
+    // Calculate the transform to view all nodes
+    const { x, y, zoom } = getViewportForBounds(nodesBounds, width, height, 0.5, 2, 0);
+
+    const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;
+    if (!viewport) return;
+
+    // We take a snapshot of the viewport element
+    const options = {
+      backgroundColor: activeTheme.canvasBg,
+      width,
+      height,
+      style: {
+        width: `${width}px`,
+        height: `${height}px`,
+        transform: `translate(${x}px, ${y}px) scale(${zoom})`,
+      },
+    };
+
+    try {
+      let dataUrl;
+      if (format === 'png') {
+        dataUrl = await toPng(viewport, options);
+      } else {
+        dataUrl = await toSvg(viewport, options);
+      }
+
+      const link = document.createElement('a');
+      const filename = flowTitle ? `${flowTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${format}` : `brain-map-flow.${format}`;
+      link.download = filename;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error("Failed to export image", err);
+      alert("Failed to export image.");
+    }
+  };
+
   const onExport = () => {
     const saveObj = {
       metadata: {
         title: flowTitle,
         author: flowAuthor,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        snapToGrid
       },
       nodes: getCleanNodes(nodes),
       edges,
@@ -757,6 +808,7 @@ function FlowEditor() {
           setTimeout(() => {
             setFlowTitle(flow.metadata.title || '');
             setFlowAuthor(flow.metadata.author || '');
+            if (flow.metadata.snapToGrid !== undefined) setSnapToGrid(flow.metadata.snapToGrid);
           }, 0);
         } else {
           setFlowTitle('');
@@ -828,11 +880,12 @@ function FlowEditor() {
           onDelete: handleDeleteEdge,
           isHighlighted: highlightedEdgeIds.has(edge.id),
           isLocked,
-          isBlurred
+          isBlurred,
+          edgeType: activeTheme.edgeType || 'bezier'
         }
       };
     });
-  }, [edges, handleDeleteEdge, highlightedEdgeIds, isSpoilerMode, revealedNodeIds, isLocked]);
+  }, [edges, handleDeleteEdge, highlightedEdgeIds, isSpoilerMode, revealedNodeIds, isLocked, activeTheme.edgeType]);
 
   return (
     <>
@@ -853,6 +906,14 @@ function FlowEditor() {
           --path-color: ${activeTheme.pathColor || (isDarkMode ? '#4b5563' : '#94a3b8')};
         }
 
+
+        .prose strong { font-weight: bold; }
+        .prose em { font-style: italic; }
+        .prose u { text-decoration: underline; }
+        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-top: 0.5em; margin-bottom: 0.5em; }
+        .prose ol { list-style-type: decimal; padding-left: 1.5rem; margin-top: 0.5em; margin-bottom: 0.5em; }
+        .prose a { color: #3b82f6; text-decoration: underline; }
+        .prose p { margin-top: 0.2em; margin-bottom: 0.2em; }
         .custom-font-family {
           font-family: var(--custom-font) !important;
         }
@@ -910,7 +971,7 @@ function FlowEditor() {
 
           <Panel position="top-right" className="bg-white dark:bg-gray-800 p-2 sm:p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 flex flex-col gap-2 w-auto sm:w-48 transition-colors pointer-events-auto">
             <div className="flex justify-center items-center w-full">
-              <div className="flex flex-wrap gap-1 sm:gap-2 items-center justify-center">
+              <div className="grid grid-cols-3 gap-1 sm:gap-2 items-center justify-items-center">
                 <button
                   onClick={() => setIsMenuCollapsed(!isMenuCollapsed)}
                   className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700 transition sm:hidden`}
@@ -919,7 +980,14 @@ function FlowEditor() {
                   {isMenuCollapsed ? <ChevronDown size={18} className="sm:w-[14px] sm:h-[14px]" /> : <ChevronUp size={18} className="sm:w-[14px] sm:h-[14px]" />}
                 </button>
                 <button
-                  onClick={() => { setShowEndings(!showEndings); setShowSettings(false); }}
+                  onClick={() => { setShowValidator(!showValidator); setShowSettings(false); setShowEndings(false); }}
+                  className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full transition ${showValidator ? 'bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
+                  title="Validate Flow"
+                >
+                  <ShieldAlert size={18} className="sm:w-[14px] sm:h-[14px]" />
+                </button>
+                <button
+                  onClick={() => { setShowEndings(!showEndings); setShowSettings(false); setShowValidator(false); }}
                   className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full transition ${showEndings ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
                   title="View Endings"
                 >
@@ -1017,6 +1085,12 @@ function FlowEditor() {
                      <button onClick={onExport} title="Export JSON" className="flex-1 flex justify-center items-center py-2 sm:py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition min-h-[44px] sm:min-h-0">
                         <Download size={20} className="sm:w-[16px] sm:h-[16px]" />
                      </button>
+                     <button onClick={() => downloadImage('png')} title="Export PNG" className="flex-1 flex justify-center items-center py-2 sm:py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition min-h-[44px] sm:min-h-0">
+                        <ImageDown size={20} className="sm:w-[16px] sm:h-[16px]" />
+                     </button>
+                     <button onClick={() => downloadImage('svg')} title="Export SVG" className="flex-1 flex justify-center items-center py-2 sm:py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition min-h-[44px] sm:min-h-0">
+                        <ImageDown size={20} className="sm:w-[16px] sm:h-[16px]" />
+                     </button>
                      <button onClick={() => !isLocked && fileInputRef.current?.click()} disabled={isLocked} title={isLocked ? "Unlock to Import JSON" : "Import JSON"} className="flex-1 flex justify-center items-center py-2 sm:py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
                         <Upload size={20} className="sm:w-[16px] sm:h-[16px]" />
                      </button>
@@ -1032,6 +1106,91 @@ function FlowEditor() {
           </Panel>
 
 
+
+          {showValidator && (
+            <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-80 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
+              <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><ShieldAlert size={16} className="text-orange-500" /> Flow Validator</h3>
+                <button onClick={() => setShowValidator(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {(() => {
+                  const issues = nodes.flatMap(node => {
+                    if (node.type === 'image') return [];
+
+                    const incoming = edges.filter(e => e.target === node.id);
+                    const outgoing = edges.filter(e => e.source === node.id);
+
+                    const isOrphan = node.id !== 'start' && incoming.length === 0;
+                    const isDeadEnd = (node.type === 'decision' || node.type === 'text') && outgoing.length === 0;
+
+                    let label = 'Unknown Node';
+                    if (node.type === 'decision') label = (node.data.prompt as string) || 'Decision Node';
+                    if (node.type === 'text') label = (node.data.content as string) || 'Text Node';
+                    if (node.type === 'outcome') label = (node.data.outcome as string) || 'Outcome Node';
+
+                    const nodeIssues = [];
+
+                    if (isOrphan && isDeadEnd) {
+                      nodeIssues.push({ node, type: 'orphan-deadend', label });
+                    } else {
+                      if (isOrphan) nodeIssues.push({ node, type: 'orphan', label });
+                      if (isDeadEnd) nodeIssues.push({ node, type: 'dead-end', label });
+                    }
+
+                    // Check for unconnected choices inside a decision node
+                    if (node.type === 'decision' && Array.isArray(node.data.choices)) {
+                      node.data.choices.forEach((choice, index) => {
+                        const hasConnection = outgoing.some(e => e.sourceHandle === `choice-${index}`);
+                        if (!hasConnection) {
+                           nodeIssues.push({ node, type: 'unconnected-choice', label: `Unconnected Choice: "${choice}" in ${label}` });
+                        }
+                      });
+                    }
+
+                    return nodeIssues;
+                  });
+
+                  if (issues.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center p-4 gap-2 text-green-600 dark:text-green-500">
+                        <Check size={32} />
+                        <p className="text-sm font-semibold text-center">No issues found!</p>
+                        <p className="text-xs opacity-80 text-center">Your flow is fully connected.</p>
+                      </div>
+                    );
+                  }
+
+                  return issues.map((issue, idx) => (
+                    <div key={idx} className="flex flex-col gap-2 p-3 rounded border bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/50">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex flex-col overflow-hidden">
+                          <span className="text-xs font-bold uppercase text-orange-600 dark:text-orange-400">
+                            {issue.type === 'orphan' ? 'Orphaned Node' : issue.type === 'dead-end' ? 'Dead End' : issue.type === 'unconnected-choice' ? 'Missing Connection' : 'Orphan & Dead End'}
+                          </span>
+                          <span className="text-sm text-gray-800 dark:text-gray-200 truncate mt-0.5">
+                            {issue.label}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (issue.node.position) {
+                              setCenter(issue.node.position.x + 100, issue.node.position.y + 100, { zoom: 1, duration: 800 });
+                              setHighlightedTargetId(issue.node.id);
+                            }
+                          }}
+                          className="p-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                          title="Locate Issue"
+                        >
+                          <LocateFixed size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </Panel>
+          )}
           {showEndings && (
             <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-72 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
               <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
@@ -1122,6 +1281,19 @@ function FlowEditor() {
                   </label>
                 </div>
                 <SettingRow label="Logo URL" settingKey="logoUrl" type="text" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <div className="flex justify-between items-center group/row">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex-1">Connector Style</label>
+                  <select
+                    value={activeTheme.edgeType || 'bezier'}
+                    onChange={(e) => updateActiveTheme('edgeType', e.target.value)}
+                    className="w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"
+                  >
+                    <option value="bezier">Bezier Curve</option>
+                    <option value="smoothstep">Smooth Step</option>
+                    <option value="step">Circuit Step</option>
+                    <option value="straight">Straight Line</option>
+                  </select>
+                </div>
                 <SettingRow label="Google Font" settingKey="fontFamily" type="text" list="fonts" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <datalist id="fonts">
                   {popularFonts.map(f => <option key={f} value={f} />)}
@@ -1283,13 +1455,13 @@ function FlowEditor() {
             ) : (
               <>
                 <div className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase border-b border-gray-100 dark:border-gray-700 mb-1">Node Actions</div>
-                {menu.targetNode?.type === 'decision' && (
+                {!isLocked && menu.targetNode?.type === 'decision' && (
                   <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400" onClick={() => handleMenuNodeAction('add_choice')}>
                     <Plus size={14} /> Add Choice
                   </button>
                 )}
 
-                {(menu.targetNode?.type === 'decision' || (menu.targetNode?.type === 'text' && menu.targetNode.data?.mediaUrl)) && (
+                {!isLocked && (menu.targetNode?.type === 'decision' || (menu.targetNode?.type === 'text' && menu.targetNode.data?.mediaUrl)) && (
                   <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => handleMenuNodeAction('toggle_text')}>
                     <EyeOff size={14} /> Toggle Text Visibility
                   </button>
@@ -1305,9 +1477,11 @@ function FlowEditor() {
                   </button>
                 )}
 
-                <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => handleMenuNodeAction('delete')}>
-                  <Trash2 size={14} /> Delete Node
-                </button>
+                {!isLocked && (
+                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => handleMenuNodeAction('delete')}>
+                    <Trash2 size={14} /> Delete Node
+                  </button>
+                )}
               </>
             )}
           </div>

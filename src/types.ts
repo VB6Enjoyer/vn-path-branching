@@ -11,6 +11,7 @@ export interface ThemeSettings {
   pathHighlightColor: string;
   pathColor: string;
   logoUrl: string;
+  edgeType?: 'bezier' | 'smoothstep' | 'step' | 'straight';
 }
 
 export const defaultLightTheme: ThemeSettings = {
@@ -26,6 +27,7 @@ export const defaultLightTheme: ThemeSettings = {
   pathHighlightColor: '#06b6d4',
   pathColor: '#94a3b8',
   logoUrl: '',
+  edgeType: 'bezier',
 };
 
 export const defaultDarkTheme: ThemeSettings = {
@@ -41,4 +43,5 @@ export const defaultDarkTheme: ThemeSettings = {
   pathHighlightColor: '#22d3ee',
   pathColor: '#4b5563',
   logoUrl: '',
+  edgeType: 'bezier',
 };
