@@ -4,6 +4,9 @@ import {
   EdgeLabelRenderer,
   EdgeProps,
   getBezierPath,
+  getSmoothStepPath,
+
+  getStraightPath,
   useReactFlow,
 } from '@xyflow/react';
 import { X } from 'lucide-react';
@@ -22,14 +25,26 @@ export function CustomEdge({
   data
 }: EdgeProps) {
   const { setEdges } = useReactFlow();
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const edgeType = data?.edgeType || 'bezier';
+  const pathParams = {
     sourceX,
     sourceY,
     sourcePosition,
     targetX,
     targetY,
     targetPosition,
-  });
+  };
+
+  let edgePath, labelX, labelY;
+  if (edgeType === 'smoothstep') {
+    [edgePath, labelX, labelY] = getSmoothStepPath(pathParams);
+  } else if (edgeType === 'step') {
+    [edgePath, labelX, labelY] = getSmoothStepPath({ ...pathParams, borderRadius: 0 });
+  } else if (edgeType === 'straight') {
+    [edgePath, labelX, labelY] = getStraightPath(pathParams);
+  } else {
+    [edgePath, labelX, labelY] = getBezierPath(pathParams);
+  }
 
   const [isHovered, setIsHovered] = useState(false);
 

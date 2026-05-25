@@ -159,6 +159,7 @@ function FlowEditor() {
   const [showValidator, setShowValidator] = useState(false);
   const [flowTitle, setFlowTitle] = useState<string>('');
   const [flowAuthor, setFlowAuthor] = useState<string>('');
+  const [snapToGrid, setSnapToGrid] = useState(false);
   const [syncSharedSettings, setSyncSharedSettings] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
   const [isMenuCollapsed, setIsMenuCollapsed] = useState(false);
@@ -346,14 +347,15 @@ function FlowEditor() {
       metadata: {
         title: flowTitle,
         author: flowAuthor,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        snapToGrid
       },
       nodes: getCleanNodes(nodes),
       edges,
       settings: { light: lightTheme, dark: darkTheme }
     };
     localStorage.setItem('brain-map-flow', JSON.stringify(saveObj));
-  }, [nodes, edges, lightTheme, darkTheme, isLoaded, flowTitle, flowAuthor]);
+  }, [nodes, edges, lightTheme, darkTheme, isLoaded, flowTitle, flowAuthor, snapToGrid]);
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
@@ -759,7 +761,8 @@ function FlowEditor() {
       metadata: {
         title: flowTitle,
         author: flowAuthor,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        snapToGrid
       },
       nodes: getCleanNodes(nodes),
       edges,
@@ -805,6 +808,7 @@ function FlowEditor() {
           setTimeout(() => {
             setFlowTitle(flow.metadata.title || '');
             setFlowAuthor(flow.metadata.author || '');
+            if (flow.metadata.snapToGrid !== undefined) setSnapToGrid(flow.metadata.snapToGrid);
           }, 0);
         } else {
           setFlowTitle('');
@@ -876,11 +880,12 @@ function FlowEditor() {
           onDelete: handleDeleteEdge,
           isHighlighted: highlightedEdgeIds.has(edge.id),
           isLocked,
-          isBlurred
+          isBlurred,
+          edgeType: activeTheme.edgeType || 'bezier'
         }
       };
     });
-  }, [edges, handleDeleteEdge, highlightedEdgeIds, isSpoilerMode, revealedNodeIds, isLocked]);
+  }, [edges, handleDeleteEdge, highlightedEdgeIds, isSpoilerMode, revealedNodeIds, isLocked, activeTheme.edgeType]);
 
   return (
     <>
@@ -1276,6 +1281,19 @@ function FlowEditor() {
                   </label>
                 </div>
                 <SettingRow label="Logo URL" settingKey="logoUrl" type="text" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <div className="flex justify-between items-center group/row">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex-1">Connector Style</label>
+                  <select
+                    value={activeTheme.edgeType || 'bezier'}
+                    onChange={(e) => updateActiveTheme('edgeType', e.target.value)}
+                    className="w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"
+                  >
+                    <option value="bezier">Bezier Curve</option>
+                    <option value="smoothstep">Smooth Step</option>
+                    <option value="step">Circuit Step</option>
+                    <option value="straight">Straight Line</option>
+                  </select>
+                </div>
                 <SettingRow label="Google Font" settingKey="fontFamily" type="text" list="fonts" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
                 <datalist id="fonts">
                   {popularFonts.map(f => <option key={f} value={f} />)}
