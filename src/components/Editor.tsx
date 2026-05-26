@@ -320,7 +320,13 @@ function FlowEditor() {
       try {
         const flow = JSON.parse(saved);
         if (flow && flow.nodes && flow.edges) {
-          setNodes(flow.nodes);
+          const loadedNodes = flow.nodes.map((n: Node) => {
+            if (n.type === 'group' && n.data?.isPositionLocked) {
+              return { ...n, draggable: false };
+            }
+            return n;
+          });
+          setNodes(loadedNodes);
           setEdges(flow.edges);
         }
         if (flow && flow.settings) {
@@ -637,8 +643,8 @@ function FlowEditor() {
     else if (type === 'text') data = { content: 'New Note' };
     else if (type === 'image') data = { mediaUrl: '' };
     else if (type === 'group') {
-      data = { label: 'Group / Route', bgColor: '#808080', bgOpacity: 20, borderColor: '#808080' };
-      style = { width: 400, height: 300 };
+      data = { label: 'Group / Route', bgColor: '#808080', bgOpacity: 20, borderColor: '#808080', isPositionLocked: false };
+      style = { width: 400, height: 300, backgroundColor: 'transparent', border: 'none', padding: 0 };
     }
     else data = { outcome: 'New Ending', type: 'neutral' };
 
@@ -647,7 +653,8 @@ function FlowEditor() {
       type,
       position,
       data,
-      style
+      style,
+      zIndex: type === 'group' ? -1 : 0
     };
 
     setNodes((nds) => nds.concat(newNode));
@@ -1533,6 +1540,7 @@ function FlowEditor() {
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('outcome', menu.x, menu.y, menu.connectionParams)}>Outcome Node</button>
                 <div className="h-px bg-gray-200 dark:bg-gray-700 my-1 mx-2"></div>
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('image', menu.x, menu.y, menu.connectionParams)}>Decorative Image</button>
+                <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('group', menu.x, menu.y, menu.connectionParams)}>Group Box</button>
                 {highlightedTargetId && (
                    <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => { setHighlightedTargetId(null); setMenu(prev => ({...prev, show: false})); }}>
                      <Waypoints size={14} /> Hide Path

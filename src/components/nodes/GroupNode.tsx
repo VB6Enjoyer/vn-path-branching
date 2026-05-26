@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NodeProps, NodeResizer, useReactFlow } from '@xyflow/react';
-import { Trash2, Settings2, Check, X } from 'lucide-react';
+import { Trash2, Settings2, Check, X, Lock, Unlock } from 'lucide-react';
 
 export function GroupNode({ id, data, selected }: NodeProps) {
   const isLocked = !!data.isLocked;
@@ -11,6 +11,9 @@ export function GroupNode({ id, data, selected }: NodeProps) {
   const [bgOpacity, setBgOpacity] = useState<number>((data.bgOpacity as number) ?? 20);
   const [borderColor, setBorderColor] = useState<string>((data.borderColor as string) || '#808080');
   const [showSettings, setShowSettings] = useState(false);
+
+  // Derive lock state directly from node data
+  const isGroupLocked = !!data.isPositionLocked;
 
   const { setNodes } = useReactFlow();
 
@@ -31,6 +34,25 @@ export function GroupNode({ id, data, selected }: NodeProps) {
   const handleSaveSettings = () => {
     updateNodeData({ label, bgColor, bgOpacity, borderColor });
     setShowSettings(false);
+  };
+
+  const toggleLock = () => {
+    const newLockState = !isGroupLocked;
+
+    // We update the data property to persist the lock
+    // And we update the root level draggable property so ReactFlow enforces it
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === id) {
+          return {
+            ...node,
+            draggable: !newLockState,
+            data: { ...node.data, isPositionLocked: newLockState },
+          };
+        }
+        return node;
+      })
+    );
   };
 
   const handleDelete = () => {
@@ -83,6 +105,13 @@ export function GroupNode({ id, data, selected }: NodeProps) {
       {/* Hover Controls */}
       {!isLocked && (
         <div className={`absolute -top-4 -right-4 flex gap-1 opacity-0 group-hover:opacity-100 ${selected ? 'opacity-100' : ''} transition-opacity z-50`}>
+          <button
+            className="bg-white dark:bg-gray-800 text-gray-500 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-full p-1.5 shadow border border-gray-200 dark:border-gray-700 transition-colors"
+            onClick={toggleLock}
+            title={isGroupLocked ? "Unlock Group Position" : "Lock Group Position"}
+          >
+            {isGroupLocked ? <Lock size={14} className="text-red-500" /> : <Unlock size={14} />}
+          </button>
           <button
             className="bg-white dark:bg-gray-800 text-gray-500 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-full p-1.5 shadow border border-gray-200 dark:border-gray-700 transition-colors"
             onClick={() => setShowSettings(!showSettings)}
