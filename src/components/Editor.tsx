@@ -326,7 +326,11 @@ function FlowEditor() {
             }
             return n;
           });
-          setNodes(loadedNodes);
+          setNodes(loadedNodes.sort((a: Node, b: Node) => {
+        if (a.type === 'group' && b.type !== 'group') return -1;
+        if (a.type !== 'group' && b.type === 'group') return 1;
+        return 0;
+      }));
           setEdges(flow.edges);
         }
         if (flow && flow.settings) {
@@ -657,7 +661,11 @@ function FlowEditor() {
       zIndex: type === 'group' ? -1 : 0
     };
 
-    setNodes((nds) => nds.concat(newNode));
+    setNodes((nds) => nds.concat(newNode).sort((a: Node, b: Node) => {
+        if (a.type === 'group' && b.type !== 'group') return -1;
+        if (a.type !== 'group' && b.type === 'group') return 1;
+        return 0;
+      }));
 
     if (connectionParams && connectionParams.source) {
        let label = '';
@@ -948,6 +956,10 @@ function FlowEditor() {
           return newN;
         }
         return n;
+      }).sort((a: Node, b: Node) => {
+        if (a.type === 'group' && b.type !== 'group') return -1;
+        if (a.type !== 'group' && b.type === 'group') return 1;
+        return 0;
       });
     });
   }, [setNodes]);
