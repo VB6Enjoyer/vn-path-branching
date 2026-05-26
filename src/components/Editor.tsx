@@ -939,15 +939,13 @@ function FlowEditor() {
       // Return updated nodes
       return nds.map(n => {
         if (n.id === node.id) {
-          return {
+          const newN = {
             ...n,
             parentId: newParentId,
             position: { x: relX, y: relY },
-            // Provide an extent constraint so nodes can't be dragged outside the group bounds easily?
-            // Actually, React Flow natively allows dragging out if extent isn't strictly 'parent'.
-            // We just let them drag out freely, our dragStop logic will un-parent them.
-            extent: newParentId ? 'parent' : undefined
           };
+          delete newN.extent; // Ensure extent is removed so it doesn't get trapped
+          return newN;
         }
         return n;
       });
