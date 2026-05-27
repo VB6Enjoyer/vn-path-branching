@@ -166,8 +166,11 @@ function FlowEditor() {
   const [syncSharedSettings, setSyncSharedSettings] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
   const [isMenuCollapsed, setIsMenuCollapsed] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setIsMounted(true); }, []);
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
@@ -185,7 +188,7 @@ function FlowEditor() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const isMobile = windowWidth < 640;
+  const isMobile = isMounted && windowWidth < 640;
 
 
   const activeTheme = isDarkMode ? darkTheme : lightTheme;
@@ -1314,8 +1317,10 @@ function FlowEditor() {
 
 
           {showSearchResults && (
-            <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-80 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
-              <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+            isMobile ? (
+              <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowSearchResults(false)}>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><Search size={16} className="text-blue-500" /> Search Results</h3>
                 <button onClick={() => setShowSearchResults(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
               </div>
@@ -1425,12 +1430,129 @@ function FlowEditor() {
                   })
                 })()}
               </div>
-            </Panel>
+                </div>
+              </div>
+            ) : (
+              <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-80 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
+                <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><Search size={16} className="text-blue-500" /> Search Results</h3>
+                <button onClick={() => setShowSearchResults(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {(() => {
+                  const query = searchQuery.toLowerCase();
+
+                  const results = nodes.filter(node => {
+                    // Respect spoiler mode
+                    if (isSpoilerMode && node.id !== 'start' && !revealedNodeIds.has(node.id)) {
+                      return false;
+                    }
+
+                    if (node.type === 'decision') {
+                      if (((node.data.prompt as string) || '').toLowerCase().includes(query)) return true;
+                      if (Array.isArray(node.data.choices)) {
+                        return node.data.choices.some(c => (c || '').toLowerCase().includes(query));
+                      }
+                    }
+                    if (node.type === 'text') {
+                      if (((node.data.content as string) || '').toLowerCase().includes(query)) return true;
+                    }
+                    if (node.type === 'outcome') {
+                      if (((node.data.outcome as string) || '').toLowerCase().includes(query)) return true;
+                    }
+                    if (node.type === 'group') {
+                      if (((node.data.label as string) || '').toLowerCase().includes(query)) return true;
+                    }
+
+                    return false;
+                  });
+
+                  if (results.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center p-4 gap-2 text-gray-500 dark:text-gray-400">
+                        <Search size={32} className="opacity-50" />
+                        <p className="text-sm font-semibold text-center">No nodes found.</p>
+                        <p className="text-xs opacity-80 text-center">Try a different search term.</p>
+                      </div>
+                    );
+                  }
+
+                  return results.map((node) => {
+                    let label = 'Unknown';
+                    let bgClass = 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200';
+
+                    if (node.type === 'decision') {
+                      label = (node.data.prompt as string) || 'Decision Node';
+                      bgClass = 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200';
+                    }
+                    if (node.type === 'text') {
+                      label = (node.data.content as string) || 'Note Node';
+                      bgClass = 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200';
+                    }
+                    if (node.type === 'outcome') {
+                      const type = node.data.type as string;
+                      label = (node.data.outcome as string) || (type === 'good' ? 'Good Ending' : type === 'bad' ? 'Bad Ending' : 'Neutral Ending');
+                      if (type === 'good') bgClass = 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200';
+                      else if (type === 'bad') bgClass = 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
+                      else bgClass = 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-200';
+                    }
+                    if (node.type === 'group') {
+                      label = (node.data.label as string) || 'Group Box';
+                    }
+
+                    return (
+                      <div key={node.id} className={`flex flex-col gap-2 p-2 rounded border ${bgClass}`}>
+                        <div className="flex items-center justify-between">
+                           <span className="text-sm font-semibold truncate flex-1" title={label}>
+                             {label}
+                           </span>
+                           <span className="text-[10px] uppercase font-bold opacity-60 ml-2 tracking-wider">
+                             {node.type}
+                           </span>
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          <button
+                            className="flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
+                            onClick={() => setHighlightedTargetId(node.id)}
+                            title="Highlight path to this node"
+                          >
+                            <Waypoints size={12} /> Highlight Path
+                          </button>
+                          <button
+                            className="flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
+                            onClick={() => {
+                               if (node.position) {
+                                 let tx = node.position.x;
+                                 let ty = node.position.y;
+                                 if (node.parentId) {
+                                    const parent = nodes.find(n => n.id === node.parentId);
+                                    if (parent) {
+                                        tx += parent.position.x;
+                                        ty += parent.position.y;
+                                    }
+                                 }
+                                 setCenter(tx + 100, ty + 100, { zoom: 1, duration: 800 });
+                               }
+                            }}
+                            title="Locate in canvas"
+                          >
+                            <LocateFixed size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                })()}
+              </div>
+              </Panel>
+            )
           )}
 
           {showValidator && (
-            <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-80 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
-              <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+            isMobile ? (
+              <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowValidator(false)}>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><ShieldAlert size={16} className="text-orange-500" /> Flow Validator</h3>
                 <button onClick={() => setShowValidator(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
               </div>
@@ -1510,11 +1632,98 @@ function FlowEditor() {
                   ));
                 })()}
               </div>
-            </Panel>
+                </div>
+              </div>
+            ) : (
+              <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-80 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
+                <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><ShieldAlert size={16} className="text-orange-500" /> Flow Validator</h3>
+                <button onClick={() => setShowValidator(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {(() => {
+                  const issues = nodes.flatMap(node => {
+                    if (node.type === 'image') return [];
+
+                    const incoming = edges.filter(e => e.target === node.id);
+                    const outgoing = edges.filter(e => e.source === node.id);
+
+                    const isOrphan = node.id !== 'start' && incoming.length === 0;
+                    const isDeadEnd = (node.type === 'decision' || node.type === 'text') && outgoing.length === 0;
+
+                    let label = 'Unknown Node';
+                    if (node.type === 'decision') label = (node.data.prompt as string) || 'Decision Node';
+                    if (node.type === 'text') label = (node.data.content as string) || 'Text Node';
+                    if (node.type === 'outcome') label = (node.data.outcome as string) || 'Outcome Node';
+
+                    const nodeIssues = [];
+
+                    if (isOrphan && isDeadEnd) {
+                      nodeIssues.push({ node, type: 'orphan-deadend', label });
+                    } else {
+                      if (isOrphan) nodeIssues.push({ node, type: 'orphan', label });
+                      if (isDeadEnd) nodeIssues.push({ node, type: 'dead-end', label });
+                    }
+
+                    // Check for unconnected choices inside a decision node
+                    if (node.type === 'decision' && Array.isArray(node.data.choices)) {
+                      node.data.choices.forEach((choice, index) => {
+                        const hasConnection = outgoing.some(e => e.sourceHandle === `choice-${index}`);
+                        if (!hasConnection) {
+                           nodeIssues.push({ node, type: 'unconnected-choice', label: `Unconnected Choice: "${choice}" in ${label}` });
+                        }
+                      });
+                    }
+
+                    return nodeIssues;
+                  });
+
+                  if (issues.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center p-4 gap-2 text-green-600 dark:text-green-500">
+                        <Check size={32} />
+                        <p className="text-sm font-semibold text-center">No issues found!</p>
+                        <p className="text-xs opacity-80 text-center">Your flow is fully connected.</p>
+                      </div>
+                    );
+                  }
+
+                  return issues.map((issue, idx) => (
+                    <div key={idx} className="flex flex-col gap-2 p-3 rounded border bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/50">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex flex-col overflow-hidden">
+                          <span className="text-xs font-bold uppercase text-orange-600 dark:text-orange-400">
+                            {issue.type === 'orphan' ? 'Orphaned Node' : issue.type === 'dead-end' ? 'Dead End' : issue.type === 'unconnected-choice' ? 'Missing Connection' : 'Orphan & Dead End'}
+                          </span>
+                          <span className="text-sm text-gray-800 dark:text-gray-200 truncate mt-0.5">
+                            {issue.label}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (issue.node.position) {
+                              setCenter(issue.node.position.x + 100, issue.node.position.y + 100, { zoom: 1, duration: 800 });
+                              setHighlightedTargetId(issue.node.id);
+                            }
+                          }}
+                          className="p-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                          title="Locate Issue"
+                        >
+                          <LocateFixed size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+              </Panel>
+            )
           )}
           {showEndings && (
-            <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-72 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
-              <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+            isMobile ? (
+              <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowEndings(false)}>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><List size={16} /> Endings Directory</h3>
                 <button onClick={() => setShowEndings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
               </div>
@@ -1578,12 +1787,83 @@ function FlowEditor() {
                   })
                 )}
               </div>
-            </Panel>
+                </div>
+              </div>
+            ) : (
+              <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-72 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
+                <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><List size={16} /> Endings Directory</h3>
+                <button onClick={() => setShowEndings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {nodes.filter(n => n.type === 'outcome').length === 0 ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 italic text-center py-4">No endings found.</p>
+                ) : (
+                  nodes.filter(n => n.type === 'outcome').map((node) => {
+                    const outcomeType = node.data.type as 'good' | 'bad' | 'neutral' || 'neutral';
+                    const isRevealed = revealedNodeIds.has(node.id);
+                    const isBlurred = isSpoilerMode && !isRevealed;
+
+                    let bgClass = 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200';
+                    if (!isBlurred) {
+                      if (outcomeType === 'good') bgClass = 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200';
+                      if (outcomeType === 'bad') bgClass = 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
+                    }
+
+                    const outcomeText = node.data.outcome as string;
+                    let displayName = outcomeText;
+                    if (!displayName || displayName === 'Ending Name') {
+                      if (outcomeType === 'good') displayName = 'Good Ending';
+                      else if (outcomeType === 'bad') displayName = 'Bad Ending';
+                      else displayName = 'Neutral Ending';
+                    }
+
+                    return (
+                      <div key={node.id} className={`flex flex-col gap-2 p-2 rounded border ${bgClass}`}>
+                        <div className="flex items-center justify-between">
+                           <span className={`text-sm font-semibold truncate flex-1 ${isBlurred ? 'blur-sm select-none' : ''}`}>
+                             {displayName}
+                           </span>
+                           {!isBlurred && (
+                             <span className="text-[10px] uppercase font-bold opacity-60 ml-2 tracking-wider">
+                               {outcomeType}
+                             </span>
+                           )}
+                        </div>
+                        <div className="flex gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center mt-1">
+                          <button
+                            className="flex-1 flex items-center justify-center gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            onClick={() => setHighlightedTargetId(node.id)}
+                            title="Highlight path to this ending"
+                          >
+                            <Waypoints size={12} /> Highlight Path
+                          </button>
+                          <button
+                            className="flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            onClick={() => {
+                               if (node.position) {
+                                 setCenter(node.position.x + 100, node.position.y + 100, { zoom: 1, duration: 800 });
+                               }
+                            }}
+                            title="Locate in canvas"
+                          >
+                            <LocateFixed size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              </Panel>
+            )
           )}
 
           {showSettings && (
-            <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-64 max-h-[80vh] overflow-y-auto mt-2" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
-              <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
+            isMobile ? (
+              <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowSettings(false)}>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100">Visual Settings ({isDarkMode ? 'Dark' : 'Light'})</h3>
                 <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
               </div>
@@ -1655,7 +1935,84 @@ function FlowEditor() {
                   Reset All Settings to Defaults
                 </button>
               </div>
-            </Panel>
+                </div>
+              </div>
+            ) : (
+              <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-64 max-h-[80vh] overflow-y-auto mt-2" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
+                <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100">Visual Settings ({isDarkMode ? 'Dark' : 'Light'})</h3>
+                <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100 dark:border-gray-700">
+                  <input
+                    type="checkbox"
+                    id="syncSettings"
+                    checked={syncSharedSettings}
+                    onChange={(e) => setSyncSharedSettings(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="syncSettings" className="text-xs text-gray-600 dark:text-gray-300 select-none cursor-pointer">
+                    Sync Logo & Font between themes
+                  </label>
+                </div>
+                <SettingRow label="Logo URL" settingKey="logoUrl" type="text" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <div className="flex justify-between items-center group/row">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex-1">Connector Style</label>
+                  <select
+                    value={activeTheme.edgeType || 'bezier'}
+                    onChange={(e) => updateActiveTheme('edgeType', e.target.value)}
+                    className="w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"
+                  >
+                    <option value="bezier">Bezier Curve</option>
+                    <option value="smoothstep">Smooth Step</option>
+                    <option value="step">Circuit Step</option>
+                    <option value="straight">Straight Line</option>
+                  </select>
+                </div>
+                <SettingRow label="Google Font" settingKey="fontFamily" type="text" list="fonts" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <datalist id="fonts">
+                  {popularFonts.map(f => <option key={f} value={f} />)}
+                </datalist>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <div className="flex justify-between items-center group/row">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Title</label>
+                  <input type="text" value={flowTitle} onChange={(e) => setFlowTitle(e.target.value)} placeholder="Untitled Flow" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
+                </div>
+                <div className="flex justify-between items-center group/row">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Author</label>
+                  <input type="text" value={flowAuthor} onChange={(e) => setFlowAuthor(e.target.value)} placeholder="Anonymous" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <SettingRow label="Canvas Bg" settingKey="canvasBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Text Box Bg" settingKey="textBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Text Color" settingKey="textColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Path Default" settingKey="pathColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Path Glow" settingKey="pathHighlightColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <SettingRow label="Decision Node" settingKey="decisionColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Note Node" settingKey="noteColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Outcome (Good)" settingKey="outcomeGoodColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Outcome (Neutral)" settingKey="outcomeNeutralColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Outcome (Bad)" settingKey="outcomeBadColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-700 mt-1">
+                <button
+                  onClick={resetAllSettings}
+                  className="w-full py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded border border-red-200 dark:border-red-800 transition"
+                >
+                  Reset All Settings to Defaults
+                </button>
+              </div>
+              </Panel>
+            )
           )}
 
         </ReactFlow>
