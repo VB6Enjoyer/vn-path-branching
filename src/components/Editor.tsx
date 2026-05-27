@@ -307,24 +307,94 @@ function FlowEditor() {
     setHighlightedTargetId(null);
   }, [future, nodes, edges, setNodes, setEdges]);
 
+  const onExport = useCallback(() => {
+    const saveObj = {
+      metadata: {
+        title: flowTitle,
+        author: flowAuthor,
+        timestamp: new Date().toISOString(),
+        snapToGrid
+      },
+      nodes: getCleanNodes(nodes),
+      edges,
+      settings: { light: lightTheme, dark: darkTheme }
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(saveObj, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href",     dataStr);
+    const filename = flowTitle ? `${flowTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json` : "brain-map-flow.json";
+    downloadAnchorNode.setAttribute("download", filename);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  }, [nodes, edges, flowTitle, flowAuthor, lightTheme, darkTheme, snapToGrid]);
+
+  const { deleteElements } = useReactFlow();
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger flow hotkeys if the user is typing in an input
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      // Ctrl+Z / Ctrl+Shift+Z : Undo / Redo
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
-        if (e.shiftKey) {
-          redo();
-        } else {
-          undo();
+        if (e.shiftKey) redo();
+        else undo();
+      }
+
+      // Ctrl+S : Save / Export
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        onExport();
+      }
+
+      // Ctrl+D : Duplicate selected nodes
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        if (isLocked) return;
+
+        const selectedNodes = nodes.filter(n => n.selected);
+        if (selectedNodes.length === 0) return;
+
+        triggerSnapshot(true);
+        const duplicatedNodes = selectedNodes.map(node => {
+          const newId = uuidv4();
+          return {
+            ...node,
+            id: newId,
+            selected: true,
+            position: { x: node.position.x + 50, y: node.position.y + 50 }
+          };
+        });
+
+        // Deselect original nodes
+        setNodes(nds => nds.map(n => ({ ...n, selected: false })).concat(duplicatedNodes).sort((a: Node, b: Node) => {
+          if (a.type === 'group' && b.type !== 'group') return -1;
+          if (a.type !== 'group' && b.type === 'group') return 1;
+          return 0;
+        }));
+      }
+
+      // Delete / Backspace : Delete selected nodes
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (isLocked) return;
+
+        const selectedNodes = nodes.filter(n => n.selected);
+        const selectedEdges = edges.filter(e => e.selected);
+
+        if (selectedNodes.length > 0 || selectedEdges.length > 0) {
+          triggerSnapshot(true);
+          deleteElements({ nodes: selectedNodes, edges: selectedEdges });
         }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, onExport, nodes, edges, isLocked, triggerSnapshot, deleteElements, setNodes]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -797,27 +867,7 @@ function FlowEditor() {
     }
   };
 
-  const onExport = () => {
-    const saveObj = {
-      metadata: {
-        title: flowTitle,
-        author: flowAuthor,
-        timestamp: new Date().toISOString(),
-        snapToGrid
-      },
-      nodes: getCleanNodes(nodes),
-      edges,
-      settings: { light: lightTheme, dark: darkTheme }
-    };
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(saveObj, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href",     dataStr);
-    const filename = flowTitle ? `${flowTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json` : "brain-map-flow.json";
-    downloadAnchorNode.setAttribute("download", filename);
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-  };
+
 
   const onImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
