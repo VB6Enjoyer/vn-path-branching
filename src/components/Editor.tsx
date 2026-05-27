@@ -1291,7 +1291,7 @@ function FlowEditor() {
                     }
                   }}
                   placeholder="Find Node..."
-                  className="flex-1 px-2 py-2 sm:py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[44px] sm:min-h-0"
+                  className="flex-1 min-w-0 px-2 py-2 sm:py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[44px] sm:min-h-0"
                 />
                 <button
                   onClick={() => {
