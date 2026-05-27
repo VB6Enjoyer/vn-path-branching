@@ -187,6 +187,22 @@ function FlowEditor() {
 
 
   const activeTheme = isDarkMode ? darkTheme : lightTheme;
+  const getMiniMapNodeColor = (node: Node) => {
+    switch (node.type) {
+      case 'decision': return activeTheme.decisionColor;
+      case 'text': return activeTheme.noteColor;
+      case 'outcome': {
+        const type = node.data?.type as string;
+        if (type === 'good') return activeTheme.outcomeGoodColor;
+        if (type === 'bad') return activeTheme.outcomeBadColor;
+        return activeTheme.outcomeNeutralColor;
+      }
+      case 'group': return (node.data?.bgColor as string) || '#808080';
+      case 'image': return '#9ca3af'; // gray-400
+      default: return isDarkMode ? '#4b5563' : '#e2e8f0';
+    }
+  };
+
   const activeDefaultTheme = isDarkMode ? defaultDarkTheme : defaultLightTheme;
 
   const [isLoaded, setIsLoaded] = useState(false);
@@ -1052,7 +1068,8 @@ function FlowEditor() {
           <Background gap={12} size={1} color={isDarkMode ? '#374151' : '#cbd5e1'} />
           <Controls className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" />
           <MiniMap className="hidden sm:block"
-            nodeColor={isDarkMode ? '#4b5563' : '#e2e8f0'}
+            nodeColor={getMiniMapNodeColor}
+            nodeBorderRadius={4}
             maskColor={isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)'}
             style={{ backgroundColor: isDarkMode ? '#1f2937' : '#ffffff' }}
           />
