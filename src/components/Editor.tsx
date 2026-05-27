@@ -1107,6 +1107,7 @@ function FlowEditor() {
           nodesConnectable={!isLocked}
           elementsSelectable={!isLocked}
           edgesFocusable={!isLocked}
+          deleteKeyCode={null}
           onNodeClick={onNodeClick}
           onNodeDragStart={onNodeDragStart}
           nodeTypes={nodeTypes}
