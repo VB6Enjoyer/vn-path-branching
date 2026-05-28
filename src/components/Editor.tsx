@@ -20,11 +20,11 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock, ChevronUp, ChevronDown, ShieldAlert, ImageDown, Check } from 'lucide-react';
+import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock, ChevronUp, ChevronDown, ShieldAlert, ImageDown, Check, Box, Search } from 'lucide-react';
 import debounce from 'lodash.debounce';
 import { toPng, toSvg } from 'html-to-image';
 
-import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode } from './nodes';
+import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode, GroupNode } from './nodes';
 import { getLayoutedElements } from '../utils/layout';
 import { ThemeSettings, defaultLightTheme, defaultDarkTheme } from '../types';
 
@@ -33,6 +33,7 @@ const nodeTypes = {
   text: TextNode,
   outcome: OutcomeNode,
   image: DecorativeNode,
+  group: GroupNode,
 };
 
 const edgeTypes = {
@@ -157,14 +158,19 @@ function FlowEditor() {
   const [flowsSort, setFlowsSort] = useState<'title' | 'date' | 'author' | 'nodes'>('date');
   const [showEndings, setShowEndings] = useState(false);
   const [showValidator, setShowValidator] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [flowTitle, setFlowTitle] = useState<string>('');
   const [flowAuthor, setFlowAuthor] = useState<string>('');
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [syncSharedSettings, setSyncSharedSettings] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
   const [isMenuCollapsed, setIsMenuCollapsed] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setIsMounted(true); }, []);
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
@@ -175,17 +181,33 @@ function FlowEditor() {
       setIsMenuCollapsed(true);
     }
     if (window.innerWidth < 640) {
-
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLocked(true);
     }
 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const isMobile = windowWidth < 640;
+  const isMobile = isMounted && windowWidth < 640;
 
 
   const activeTheme = isDarkMode ? darkTheme : lightTheme;
+  const getMiniMapNodeColor = (node: Node) => {
+    switch (node.type) {
+      case 'decision': return activeTheme.decisionColor;
+      case 'text': return activeTheme.noteColor;
+      case 'outcome': {
+        const type = node.data?.type as string;
+        if (type === 'good') return activeTheme.outcomeGoodColor;
+        if (type === 'bad') return activeTheme.outcomeBadColor;
+        return activeTheme.outcomeNeutralColor;
+      }
+      case 'group': return (node.data?.bgColor as string) || '#808080';
+      case 'image': return '#9ca3af'; // gray-400
+      default: return isDarkMode ? '#4b5563' : '#e2e8f0';
+    }
+  };
+
   const activeDefaultTheme = isDarkMode ? defaultDarkTheme : defaultLightTheme;
 
   const [isLoaded, setIsLoaded] = useState(false);
@@ -290,24 +312,94 @@ function FlowEditor() {
     setHighlightedTargetId(null);
   }, [future, nodes, edges, setNodes, setEdges]);
 
+  const onExport = useCallback(() => {
+    const saveObj = {
+      metadata: {
+        title: flowTitle,
+        author: flowAuthor,
+        timestamp: new Date().toISOString(),
+        snapToGrid
+      },
+      nodes: getCleanNodes(nodes),
+      edges,
+      settings: { light: lightTheme, dark: darkTheme }
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(saveObj, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href",     dataStr);
+    const filename = flowTitle ? `${flowTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json` : "brain-map-flow.json";
+    downloadAnchorNode.setAttribute("download", filename);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  }, [nodes, edges, flowTitle, flowAuthor, lightTheme, darkTheme, snapToGrid]);
+
+  const { deleteElements } = useReactFlow();
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger flow hotkeys if the user is typing in an input
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      // Ctrl+Z / Ctrl+Shift+Z : Undo / Redo
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
-        if (e.shiftKey) {
-          redo();
-        } else {
-          undo();
+        if (e.shiftKey) redo();
+        else undo();
+      }
+
+      // Ctrl+S : Save / Export
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        onExport();
+      }
+
+      // Ctrl+D : Duplicate selected nodes
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        if (isLocked) return;
+
+        const selectedNodes = nodes.filter(n => n.selected);
+        if (selectedNodes.length === 0) return;
+
+        triggerSnapshot(true);
+        const duplicatedNodes = selectedNodes.map(node => {
+          const newId = uuidv4();
+          return {
+            ...node,
+            id: newId,
+            selected: true,
+            position: { x: node.position.x + 50, y: node.position.y + 50 }
+          };
+        });
+
+        // Deselect original nodes
+        setNodes(nds => nds.map(n => ({ ...n, selected: false })).concat(duplicatedNodes).sort((a: Node, b: Node) => {
+          if (a.type === 'group' && b.type !== 'group') return -1;
+          if (a.type !== 'group' && b.type === 'group') return 1;
+          return 0;
+        }));
+      }
+
+      // Delete / Backspace : Delete selected nodes
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (isLocked) return;
+
+        const selectedNodes = nodes.filter(n => n.selected);
+        const selectedEdges = edges.filter(e => e.selected);
+
+        if (selectedNodes.length > 0 || selectedEdges.length > 0) {
+          triggerSnapshot(true);
+          deleteElements({ nodes: selectedNodes, edges: selectedEdges });
         }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, onExport, nodes, edges, isLocked, triggerSnapshot, deleteElements, setNodes]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -319,7 +411,17 @@ function FlowEditor() {
       try {
         const flow = JSON.parse(saved);
         if (flow && flow.nodes && flow.edges) {
-          setNodes(flow.nodes);
+          const loadedNodes = flow.nodes.map((n: Node) => {
+            if (n.type === 'group' && n.data?.isPositionLocked) {
+              return { ...n, draggable: false };
+            }
+            return n;
+          });
+          setNodes(loadedNodes.sort((a: Node, b: Node) => {
+        if (a.type === 'group' && b.type !== 'group') return -1;
+        if (a.type !== 'group' && b.type === 'group') return 1;
+        return 0;
+      }));
           setEdges(flow.edges);
         }
         if (flow && flow.settings) {
@@ -621,7 +723,7 @@ function FlowEditor() {
     [nodes, edges, setNodes, setEdges, triggerSnapshot]
   );
 
-  const addNode = (type: 'decision' | 'text' | 'outcome' | 'image', menuX?: number, menuY?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
+  const addNode = (type: 'decision' | 'text' | 'outcome' | 'image' | 'group', menuX?: number, menuY?: number, connectionParams?: {source: string, sourceHandle?: string}) => {
     triggerSnapshot(true);
     let position = { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 100 };
     if (menuX !== undefined && menuY !== undefined && reactFlowWrapper.current) {
@@ -630,17 +732,31 @@ function FlowEditor() {
     }
 
     const id = uuidv4();
+    let data = {};
+    let style = undefined;
+    if (type === 'decision') data = { prompt: 'New Decision', choices: ['Choice A', 'Choice B'] };
+    else if (type === 'text') data = { content: 'New Note' };
+    else if (type === 'image') data = { mediaUrl: '' };
+    else if (type === 'group') {
+      data = { label: 'Group / Route', bgColor: '#808080', bgOpacity: 20, borderColor: '#808080', isPositionLocked: false };
+      style = { width: 400, height: 300, backgroundColor: 'transparent', border: 'none', padding: 0 };
+    }
+    else data = { outcome: 'New Ending', type: 'neutral' };
+
     const newNode: Node = {
       id,
       type,
       position,
-      data:
-        type === 'decision' ? { prompt: 'New Decision', choices: ['Choice A', 'Choice B'] } :
-        type === 'text' ? { content: 'New Note' } :
-        { outcome: 'New Ending', type: 'neutral' },
+      data,
+      style,
+      zIndex: type === 'group' ? -1 : 0
     };
 
-    setNodes((nds) => nds.concat(newNode));
+    setNodes((nds) => nds.concat(newNode).sort((a: Node, b: Node) => {
+        if (a.type === 'group' && b.type !== 'group') return -1;
+        if (a.type !== 'group' && b.type === 'group') return 1;
+        return 0;
+      }));
 
     if (connectionParams && connectionParams.source) {
        let label = '';
@@ -756,27 +872,7 @@ function FlowEditor() {
     }
   };
 
-  const onExport = () => {
-    const saveObj = {
-      metadata: {
-        title: flowTitle,
-        author: flowAuthor,
-        timestamp: new Date().toISOString(),
-        snapToGrid
-      },
-      nodes: getCleanNodes(nodes),
-      edges,
-      settings: { light: lightTheme, dark: darkTheme }
-    };
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(saveObj, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href",     dataStr);
-    const filename = flowTitle ? `${flowTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json` : "brain-map-flow.json";
-    downloadAnchorNode.setAttribute("download", filename);
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-  };
+
 
   const onImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -864,6 +960,81 @@ function FlowEditor() {
     triggerSnapshot(true);
   }, [triggerSnapshot]);
 
+  const onNodeDragStop = useCallback((event: React.MouseEvent, node: Node) => {
+    // If we dragged a group, we don't need to reassign its parent.
+    if (node.type === 'group') return;
+
+    setNodes((nds) => {
+      // Find all groups
+      const groups = nds.filter(n => n.type === 'group');
+      if (groups.length === 0) return nds;
+
+      // Calculate absolute position of the dragged node
+      let absX = node.position.x;
+      let absY = node.position.y;
+
+      if (node.parentId) {
+        const parent = nds.find(n => n.id === node.parentId);
+        if (parent) {
+          absX += parent.position.x;
+          absY += parent.position.y;
+        }
+      }
+
+      // Check if the center of the dragged node falls inside any group
+      const nodeCenter = {
+        x: absX + (node.measured?.width || 200) / 2,
+        y: absY + (node.measured?.height || 100) / 2
+      };
+
+      let newParentId: string | undefined = undefined;
+      let relX = absX;
+      let relY = absY;
+
+      // Iterate groups in reverse to pick the top-most one if they overlap
+      for (let i = groups.length - 1; i >= 0; i--) {
+        const g = groups[i];
+        const gWidth = g.style?.width as number || g.measured?.width || 400;
+        const gHeight = g.style?.height as number || g.measured?.height || 300;
+
+        if (
+          nodeCenter.x >= g.position.x &&
+          nodeCenter.x <= g.position.x + gWidth &&
+          nodeCenter.y >= g.position.y &&
+          nodeCenter.y <= g.position.y + gHeight
+        ) {
+          newParentId = g.id;
+          relX = absX - g.position.x;
+          relY = absY - g.position.y;
+          break;
+        }
+      }
+
+      // If parent didn't change, no updates needed to parentId
+      if (node.parentId === newParentId) {
+        return nds;
+      }
+
+      // Return updated nodes
+      return nds.map(n => {
+        if (n.id === node.id) {
+          const newN = {
+            ...n,
+            parentId: newParentId,
+            position: { x: relX, y: relY },
+          };
+          delete newN.extent; // Ensure extent is removed so it doesn't get trapped
+          return newN;
+        }
+        return n;
+      }).sort((a: Node, b: Node) => {
+        if (a.type === 'group' && b.type !== 'group') return -1;
+        if (a.type !== 'group' && b.type === 'group') return 1;
+        return 0;
+      });
+    });
+  }, [setNodes]);
+
   const handleDeleteEdge = useCallback((edgeId: string) => {
     triggerSnapshot(true);
     setEdges((eds) => eds.filter((e) => e.id !== edgeId));
@@ -936,10 +1107,12 @@ function FlowEditor() {
           onPaneClick={onPaneClick}
           onPaneContextMenu={onPaneContextMenu}
           onNodeContextMenu={onNodeContextMenu}
+          onNodeDragStop={onNodeDragStop}
           nodesDraggable={!isLocked}
           nodesConnectable={!isLocked}
           elementsSelectable={!isLocked}
           edgesFocusable={!isLocked}
+          deleteKeyCode={null}
           onNodeClick={onNodeClick}
           onNodeDragStart={onNodeDragStart}
           nodeTypes={nodeTypes}
@@ -951,7 +1124,8 @@ function FlowEditor() {
           <Background gap={12} size={1} color={isDarkMode ? '#374151' : '#cbd5e1'} />
           <Controls className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" />
           <MiniMap className="hidden sm:block"
-            nodeColor={isDarkMode ? '#4b5563' : '#e2e8f0'}
+            nodeColor={getMiniMapNodeColor}
+            nodeBorderRadius={4}
             maskColor={isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)'}
             style={{ backgroundColor: isDarkMode ? '#1f2937' : '#ffffff' }}
           />
@@ -980,21 +1154,21 @@ function FlowEditor() {
                   {isMenuCollapsed ? <ChevronDown size={18} className="sm:w-[14px] sm:h-[14px]" /> : <ChevronUp size={18} className="sm:w-[14px] sm:h-[14px]" />}
                 </button>
                 <button
-                  onClick={() => { setShowValidator(!showValidator); setShowSettings(false); setShowEndings(false); }}
+                  onClick={() => { setShowValidator(!showValidator); setShowSettings(false); setShowEndings(false); setShowSearchResults(false); }}
                   className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full transition ${showValidator ? 'bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
                   title="Validate Flow"
                 >
                   <ShieldAlert size={18} className="sm:w-[14px] sm:h-[14px]" />
                 </button>
                 <button
-                  onClick={() => { setShowEndings(!showEndings); setShowSettings(false); setShowValidator(false); }}
+                  onClick={() => { setShowEndings(!showEndings); setShowSettings(false); setShowValidator(false); setShowSearchResults(false); setShowValidator(false); }}
                   className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full transition ${showEndings ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
                   title="View Endings"
                 >
                   <List size={18} className="sm:w-[14px] sm:h-[14px]" />
                 </button>
                 <button
-                  onClick={() => { setIsLocked(!isLocked); setShowSettings(false); }}
+                  onClick={() => { setIsLocked(!isLocked); setShowSettings(false); setShowValidator(false); setShowEndings(false); setShowSearchResults(false); }}
                   className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full transition ${isLocked ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'}`}
                   title={isLocked ? "Unlock Canvas" : "Lock Canvas (Read-Only)"}
                 >
@@ -1002,7 +1176,7 @@ function FlowEditor() {
                 </button>
                 {!isMobile && (
                   <button
-                    onClick={() => { setShowSettings(!showSettings); setShowEndings(false); }}
+                    onClick={() => { setShowSettings(!showSettings); setShowEndings(false); setShowValidator(false); setShowSearchResults(false); }}
                     disabled={isLocked}
                     className={`p-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-full transition ${showSettings ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
                     title={isLocked ? "Unlock Canvas to Edit Settings" : "Visual Settings"}
@@ -1042,6 +1216,9 @@ function FlowEditor() {
                   </button>
                   <button onClick={() => addNode('outcome')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-sm hover:bg-purple-100 dark:hover:bg-purple-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
                     <Waypoints size={18} className="sm:w-[14px] sm:h-[14px]" /> Outcome
+                  </button>
+                  <button onClick={() => addNode('group')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
+                    <Box size={18} className="sm:w-[14px] sm:h-[14px]" /> Group Box
                   </button>
 
                   <hr className="my-1 border-gray-100 dark:border-gray-700" />
@@ -1102,15 +1279,363 @@ function FlowEditor() {
               <button onClick={centerOnStart} className="w-full px-3 py-2 sm:py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition flex items-center justify-center gap-2 min-h-[44px] sm:min-h-0">
                 <LocateFixed size={18} className="sm:w-[14px] sm:h-[14px]" /> Locate Start
               </button>
+
+              <div className="flex w-full gap-1 mt-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchQuery.trim() !== '') {
+                      setShowSettings(false);
+                      setShowEndings(false);
+                      setShowValidator(false);
+                      setShowSearchResults(true);
+                    }
+                  }}
+                  placeholder="Find Node..."
+                  className="flex-1 min-w-0 px-2 py-2 sm:py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[44px] sm:min-h-0"
+                />
+                <button
+                  onClick={() => {
+                    if (searchQuery.trim() !== '') {
+                      setShowSettings(false);
+                      setShowEndings(false);
+                      setShowValidator(false);
+                      setShowSearchResults(true);
+                    }
+                  }}
+                  className="px-3 py-2 sm:py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition flex items-center justify-center min-h-[44px] sm:min-h-0"
+                  title="Search Nodes"
+                >
+                  <Search size={16} />
+                </button>
+              </div>
             </div>
           </Panel>
 
 
 
+          {showSearchResults && (
+            isMobile ? (
+              <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowSearchResults(false)}>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><Search size={16} className="text-blue-500" /> Search Results</h3>
+                <button onClick={() => setShowSearchResults(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {(() => {
+                  const query = searchQuery.toLowerCase();
+
+                  const results = nodes.filter(node => {
+                    // Respect spoiler mode
+                    if (isSpoilerMode && node.id !== 'start' && !revealedNodeIds.has(node.id)) {
+                      return false;
+                    }
+
+                    if (node.type === 'decision') {
+                      if (((node.data.prompt as string) || '').toLowerCase().includes(query)) return true;
+                      if (Array.isArray(node.data.choices)) {
+                        return node.data.choices.some(c => (c || '').toLowerCase().includes(query));
+                      }
+                    }
+                    if (node.type === 'text') {
+                      if (((node.data.content as string) || '').toLowerCase().includes(query)) return true;
+                    }
+                    if (node.type === 'outcome') {
+                      if (((node.data.outcome as string) || '').toLowerCase().includes(query)) return true;
+                    }
+                    if (node.type === 'group') {
+                      if (((node.data.label as string) || '').toLowerCase().includes(query)) return true;
+                    }
+
+                    return false;
+                  });
+
+                  if (results.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center p-4 gap-2 text-gray-500 dark:text-gray-400">
+                        <Search size={32} className="opacity-50" />
+                        <p className="text-sm font-semibold text-center">No nodes found.</p>
+                        <p className="text-xs opacity-80 text-center">Try a different search term.</p>
+                      </div>
+                    );
+                  }
+
+                  return results.map((node) => {
+                    let label = 'Unknown';
+                    let bgClass = 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200';
+
+                    if (node.type === 'decision') {
+                      label = (node.data.prompt as string) || 'Decision Node';
+                      bgClass = 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200';
+                    }
+                    if (node.type === 'text') {
+                      label = (node.data.content as string) || 'Note Node';
+                      bgClass = 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200';
+                    }
+                    if (node.type === 'outcome') {
+                      const type = node.data.type as string;
+                      label = (node.data.outcome as string) || (type === 'good' ? 'Good Ending' : type === 'bad' ? 'Bad Ending' : 'Neutral Ending');
+                      if (type === 'good') bgClass = 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200';
+                      else if (type === 'bad') bgClass = 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
+                      else bgClass = 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-200';
+                    }
+                    if (node.type === 'group') {
+                      label = (node.data.label as string) || 'Group Box';
+                    }
+
+                    return (
+                      <div key={node.id} className={`flex flex-col gap-2 p-2 rounded border ${bgClass}`}>
+                        <div className="flex items-center justify-between">
+                           <span className="text-sm font-semibold truncate flex-1" title={label}>
+                             {label}
+                           </span>
+                           <span className="text-[10px] uppercase font-bold opacity-60 ml-2 tracking-wider">
+                             {node.type}
+                           </span>
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          <button
+                            className="flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
+                            onClick={() => setHighlightedTargetId(node.id)}
+                            title="Highlight path to this node"
+                          >
+                            <Waypoints size={12} /> Highlight Path
+                          </button>
+                          <button
+                            className="flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
+                            onClick={() => {
+                               if (node.position) {
+                                 let tx = node.position.x;
+                                 let ty = node.position.y;
+                                 if (node.parentId) {
+                                    const parent = nodes.find(n => n.id === node.parentId);
+                                    if (parent) {
+                                        tx += parent.position.x;
+                                        ty += parent.position.y;
+                                    }
+                                 }
+                                 setCenter(tx + 100, ty + 100, { zoom: 1, duration: 800 });
+                               }
+                            }}
+                            title="Locate in canvas"
+                          >
+                            <LocateFixed size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                })()}
+              </div>
+                </div>
+              </div>
+            ) : (
+              <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-80 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
+                <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><Search size={16} className="text-blue-500" /> Search Results</h3>
+                <button onClick={() => setShowSearchResults(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {(() => {
+                  const query = searchQuery.toLowerCase();
+
+                  const results = nodes.filter(node => {
+                    // Respect spoiler mode
+                    if (isSpoilerMode && node.id !== 'start' && !revealedNodeIds.has(node.id)) {
+                      return false;
+                    }
+
+                    if (node.type === 'decision') {
+                      if (((node.data.prompt as string) || '').toLowerCase().includes(query)) return true;
+                      if (Array.isArray(node.data.choices)) {
+                        return node.data.choices.some(c => (c || '').toLowerCase().includes(query));
+                      }
+                    }
+                    if (node.type === 'text') {
+                      if (((node.data.content as string) || '').toLowerCase().includes(query)) return true;
+                    }
+                    if (node.type === 'outcome') {
+                      if (((node.data.outcome as string) || '').toLowerCase().includes(query)) return true;
+                    }
+                    if (node.type === 'group') {
+                      if (((node.data.label as string) || '').toLowerCase().includes(query)) return true;
+                    }
+
+                    return false;
+                  });
+
+                  if (results.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center p-4 gap-2 text-gray-500 dark:text-gray-400">
+                        <Search size={32} className="opacity-50" />
+                        <p className="text-sm font-semibold text-center">No nodes found.</p>
+                        <p className="text-xs opacity-80 text-center">Try a different search term.</p>
+                      </div>
+                    );
+                  }
+
+                  return results.map((node) => {
+                    let label = 'Unknown';
+                    let bgClass = 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200';
+
+                    if (node.type === 'decision') {
+                      label = (node.data.prompt as string) || 'Decision Node';
+                      bgClass = 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200';
+                    }
+                    if (node.type === 'text') {
+                      label = (node.data.content as string) || 'Note Node';
+                      bgClass = 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200';
+                    }
+                    if (node.type === 'outcome') {
+                      const type = node.data.type as string;
+                      label = (node.data.outcome as string) || (type === 'good' ? 'Good Ending' : type === 'bad' ? 'Bad Ending' : 'Neutral Ending');
+                      if (type === 'good') bgClass = 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200';
+                      else if (type === 'bad') bgClass = 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
+                      else bgClass = 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-200';
+                    }
+                    if (node.type === 'group') {
+                      label = (node.data.label as string) || 'Group Box';
+                    }
+
+                    return (
+                      <div key={node.id} className={`flex flex-col gap-2 p-2 rounded border ${bgClass}`}>
+                        <div className="flex items-center justify-between">
+                           <span className="text-sm font-semibold truncate flex-1" title={label}>
+                             {label}
+                           </span>
+                           <span className="text-[10px] uppercase font-bold opacity-60 ml-2 tracking-wider">
+                             {node.type}
+                           </span>
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          <button
+                            className="flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
+                            onClick={() => setHighlightedTargetId(node.id)}
+                            title="Highlight path to this node"
+                          >
+                            <Waypoints size={12} /> Highlight Path
+                          </button>
+                          <button
+                            className="flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
+                            onClick={() => {
+                               if (node.position) {
+                                 let tx = node.position.x;
+                                 let ty = node.position.y;
+                                 if (node.parentId) {
+                                    const parent = nodes.find(n => n.id === node.parentId);
+                                    if (parent) {
+                                        tx += parent.position.x;
+                                        ty += parent.position.y;
+                                    }
+                                 }
+                                 setCenter(tx + 100, ty + 100, { zoom: 1, duration: 800 });
+                               }
+                            }}
+                            title="Locate in canvas"
+                          >
+                            <LocateFixed size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                })()}
+              </div>
+              </Panel>
+            )
+          )}
+
           {showValidator && (
-          isMobile ? (
-            <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowValidator(false)}>
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+            isMobile ? (
+              <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowValidator(false)}>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><ShieldAlert size={16} className="text-orange-500" /> Flow Validator</h3>
+                <button onClick={() => setShowValidator(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {(() => {
+                  const issues = nodes.flatMap(node => {
+                    if (node.type === 'image') return [];
+
+                    const incoming = edges.filter(e => e.target === node.id);
+                    const outgoing = edges.filter(e => e.source === node.id);
+
+                    const isOrphan = node.id !== 'start' && incoming.length === 0;
+                    const isDeadEnd = (node.type === 'decision' || node.type === 'text') && outgoing.length === 0;
+
+                    let label = 'Unknown Node';
+                    if (node.type === 'decision') label = (node.data.prompt as string) || 'Decision Node';
+                    if (node.type === 'text') label = (node.data.content as string) || 'Text Node';
+                    if (node.type === 'outcome') label = (node.data.outcome as string) || 'Outcome Node';
+
+                    const nodeIssues = [];
+
+                    if (isOrphan && isDeadEnd) {
+                      nodeIssues.push({ node, type: 'orphan-deadend', label });
+                    } else {
+                      if (isOrphan) nodeIssues.push({ node, type: 'orphan', label });
+                      if (isDeadEnd) nodeIssues.push({ node, type: 'dead-end', label });
+                    }
+
+                    // Check for unconnected choices inside a decision node
+                    if (node.type === 'decision' && Array.isArray(node.data.choices)) {
+                      node.data.choices.forEach((choice, index) => {
+                        const hasConnection = outgoing.some(e => e.sourceHandle === `choice-${index}`);
+                        if (!hasConnection) {
+                           nodeIssues.push({ node, type: 'unconnected-choice', label: `Unconnected Choice: "${choice}" in ${label}` });
+                        }
+                      });
+                    }
+
+                    return nodeIssues;
+                  });
+
+                  if (issues.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center p-4 gap-2 text-green-600 dark:text-green-500">
+                        <Check size={32} />
+                        <p className="text-sm font-semibold text-center">No issues found!</p>
+                        <p className="text-xs opacity-80 text-center">Your flow is fully connected.</p>
+                      </div>
+                    );
+                  }
+
+                  return issues.map((issue, idx) => (
+                    <div key={idx} className="flex flex-col gap-2 p-3 rounded border bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/50">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex flex-col overflow-hidden">
+                          <span className="text-xs font-bold uppercase text-orange-600 dark:text-orange-400">
+                            {issue.type === 'orphan' ? 'Orphaned Node' : issue.type === 'dead-end' ? 'Dead End' : issue.type === 'unconnected-choice' ? 'Missing Connection' : 'Orphan & Dead End'}
+                          </span>
+                          <span className="text-sm text-gray-800 dark:text-gray-200 truncate mt-0.5">
+                            {issue.label}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (issue.node.position) {
+                              setCenter(issue.node.position.x + 100, issue.node.position.y + 100, { zoom: 1, duration: 800 });
+                              setHighlightedTargetId(issue.node.id);
+                            }
+                          }}
+                          className="p-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                          title="Locate Issue"
+                        >
+                          <LocateFixed size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+                </div>
+              </div>
+            ) : (
+              <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-80 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
                 <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><ShieldAlert size={16} className="text-orange-500" /> Flow Validator</h3>
                 <button onClick={() => setShowValidator(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
@@ -1191,97 +1716,81 @@ function FlowEditor() {
                   ));
                 })()}
               </div>
-              </div>
-            </div>
-          ) : (
-            <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-80 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
-              <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
-                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><ShieldAlert size={16} className="text-orange-500" /> Flow Validator</h3>
-                <button onClick={() => setShowValidator(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
-              </div>
-              <div className="flex flex-col gap-2">
-                {(() => {
-                  const issues = nodes.flatMap(node => {
-                    if (node.type === 'image') return [];
-
-                    const incoming = edges.filter(e => e.target === node.id);
-                    const outgoing = edges.filter(e => e.source === node.id);
-
-                    const isOrphan = node.id !== 'start' && incoming.length === 0;
-                    const isDeadEnd = (node.type === 'decision' || node.type === 'text') && outgoing.length === 0;
-
-                    let label = 'Unknown Node';
-                    if (node.type === 'decision') label = (node.data.prompt as string) || 'Decision Node';
-                    if (node.type === 'text') label = (node.data.content as string) || 'Text Node';
-                    if (node.type === 'outcome') label = (node.data.outcome as string) || 'Outcome Node';
-
-                    const nodeIssues = [];
-
-                    if (isOrphan && isDeadEnd) {
-                      nodeIssues.push({ node, type: 'orphan-deadend', label });
-                    } else {
-                      if (isOrphan) nodeIssues.push({ node, type: 'orphan', label });
-                      if (isDeadEnd) nodeIssues.push({ node, type: 'dead-end', label });
-                    }
-
-                    // Check for unconnected choices inside a decision node
-                    if (node.type === 'decision' && Array.isArray(node.data.choices)) {
-                      node.data.choices.forEach((choice, index) => {
-                        const hasConnection = outgoing.some(e => e.sourceHandle === `choice-${index}`);
-                        if (!hasConnection) {
-                           nodeIssues.push({ node, type: 'unconnected-choice', label: `Unconnected Choice: "${choice}" in ${label}` });
-                        }
-                      });
-                    }
-
-                    return nodeIssues;
-                  });
-
-                  if (issues.length === 0) {
-                    return (
-                      <div className="flex flex-col items-center justify-center p-4 gap-2 text-green-600 dark:text-green-500">
-                        <Check size={32} />
-                        <p className="text-sm font-semibold text-center">No issues found!</p>
-                        <p className="text-xs opacity-80 text-center">Your flow is fully connected.</p>
-                      </div>
-                    );
-                  }
-
-                  return issues.map((issue, idx) => (
-                    <div key={idx} className="flex flex-col gap-2 p-3 rounded border bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/50">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex flex-col overflow-hidden">
-                          <span className="text-xs font-bold uppercase text-orange-600 dark:text-orange-400">
-                            {issue.type === 'orphan' ? 'Orphaned Node' : issue.type === 'dead-end' ? 'Dead End' : issue.type === 'unconnected-choice' ? 'Missing Connection' : 'Orphan & Dead End'}
-                          </span>
-                          <span className="text-sm text-gray-800 dark:text-gray-200 truncate mt-0.5">
-                            {issue.label}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => {
-                            if (issue.node.position) {
-                              setCenter(issue.node.position.x + 100, issue.node.position.y + 100, { zoom: 1, duration: 800 });
-                              setHighlightedTargetId(issue.node.id);
-                            }
-                          }}
-                          className="p-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                          title="Locate Issue"
-                        >
-                          <LocateFixed size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ));
-                })()}
-              </div>
-            </Panel>
-          )
-        )}
+              </Panel>
+            )
+          )}
           {showEndings && (
-          isMobile ? (
-            <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowEndings(false)}>
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+            isMobile ? (
+              <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowEndings(false)}>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><List size={16} /> Endings Directory</h3>
+                <button onClick={() => setShowEndings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {nodes.filter(n => n.type === 'outcome').length === 0 ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 italic text-center py-4">No endings found.</p>
+                ) : (
+                  nodes.filter(n => n.type === 'outcome').map((node) => {
+                    const outcomeType = node.data.type as 'good' | 'bad' | 'neutral' || 'neutral';
+                    const isRevealed = revealedNodeIds.has(node.id);
+                    const isBlurred = isSpoilerMode && !isRevealed;
+
+                    let bgClass = 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200';
+                    if (!isBlurred) {
+                      if (outcomeType === 'good') bgClass = 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200';
+                      if (outcomeType === 'bad') bgClass = 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
+                    }
+
+                    const outcomeText = node.data.outcome as string;
+                    let displayName = outcomeText;
+                    if (!displayName || displayName === 'Ending Name') {
+                      if (outcomeType === 'good') displayName = 'Good Ending';
+                      else if (outcomeType === 'bad') displayName = 'Bad Ending';
+                      else displayName = 'Neutral Ending';
+                    }
+
+                    return (
+                      <div key={node.id} className={`flex flex-col gap-2 p-2 rounded border ${bgClass}`}>
+                        <div className="flex items-center justify-between">
+                           <span className={`text-sm font-semibold truncate flex-1 ${isBlurred ? 'blur-sm select-none' : ''}`}>
+                             {displayName}
+                           </span>
+                           {!isBlurred && (
+                             <span className="text-[10px] uppercase font-bold opacity-60 ml-2 tracking-wider">
+                               {outcomeType}
+                             </span>
+                           )}
+                        </div>
+                        <div className="flex gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center mt-1">
+                          <button
+                            className="flex-1 flex items-center justify-center gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            onClick={() => setHighlightedTargetId(node.id)}
+                            title="Highlight path to this ending"
+                          >
+                            <Waypoints size={12} /> Highlight Path
+                          </button>
+                          <button
+                            className="flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            onClick={() => {
+                               if (node.position) {
+                                 setCenter(node.position.x + 100, node.position.y + 100, { zoom: 1, duration: 800 });
+                               }
+                            }}
+                            title="Locate in canvas"
+                          >
+                            <LocateFixed size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+                </div>
+              </div>
+            ) : (
+              <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-72 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
                 <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><List size={16} /> Endings Directory</h3>
                 <button onClick={() => setShowEndings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
@@ -1346,82 +1855,90 @@ function FlowEditor() {
                   })
                 )}
               </div>
-              </div>
-            </div>
-          ) : (
-            <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-72 max-h-[80vh] overflow-y-auto mt-2 pointer-events-auto" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
-              <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
-                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2"><List size={16} /> Endings Directory</h3>
-                <button onClick={() => setShowEndings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
-              </div>
-              <div className="flex flex-col gap-2">
-                {nodes.filter(n => n.type === 'outcome').length === 0 ? (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 italic text-center py-4">No endings found.</p>
-                ) : (
-                  nodes.filter(n => n.type === 'outcome').map((node) => {
-                    const outcomeType = node.data.type as 'good' | 'bad' | 'neutral' || 'neutral';
-                    const isRevealed = revealedNodeIds.has(node.id);
-                    const isBlurred = isSpoilerMode && !isRevealed;
-
-                    let bgClass = 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200';
-                    if (!isBlurred) {
-                      if (outcomeType === 'good') bgClass = 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200';
-                      if (outcomeType === 'bad') bgClass = 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
-                    }
-
-                    const outcomeText = node.data.outcome as string;
-                    let displayName = outcomeText;
-                    if (!displayName || displayName === 'Ending Name') {
-                      if (outcomeType === 'good') displayName = 'Good Ending';
-                      else if (outcomeType === 'bad') displayName = 'Bad Ending';
-                      else displayName = 'Neutral Ending';
-                    }
-
-                    return (
-                      <div key={node.id} className={`flex flex-col gap-2 p-2 rounded border ${bgClass}`}>
-                        <div className="flex items-center justify-between">
-                           <span className={`text-sm font-semibold truncate flex-1 ${isBlurred ? 'blur-sm select-none' : ''}`}>
-                             {displayName}
-                           </span>
-                           {!isBlurred && (
-                             <span className="text-[10px] uppercase font-bold opacity-60 ml-2 tracking-wider">
-                               {outcomeType}
-                             </span>
-                           )}
-                        </div>
-                        <div className="flex gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center mt-1">
-                          <button
-                            className="flex-1 flex items-center justify-center gap-2 sm:p-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                            onClick={() => setHighlightedTargetId(node.id)}
-                            title="Highlight path to this ending"
-                          >
-                            <Waypoints size={12} /> Highlight Path
-                          </button>
-                          <button
-                            className="flex items-center justify-center py-1 px-2 text-xs bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                            onClick={() => {
-                               if (node.position) {
-                                 setCenter(node.position.x + 100, node.position.y + 100, { zoom: 1, duration: 800 });
-                               }
-                            }}
-                            title="Locate in canvas"
-                          >
-                            <LocateFixed size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </Panel>
-          )
-        )}
+              </Panel>
+            )
+          )}
 
           {showSettings && (
-          isMobile ? (
-            <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowSettings(false)}>
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+            isMobile ? (
+              <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowSettings(false)}>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-full max-w-sm max-h-[80vh] overflow-y-auto pointer-events-auto p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100">Visual Settings ({isDarkMode ? 'Dark' : 'Light'})</h3>
+                <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100 dark:border-gray-700">
+                  <input
+                    type="checkbox"
+                    id="syncSettings"
+                    checked={syncSharedSettings}
+                    onChange={(e) => setSyncSharedSettings(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="syncSettings" className="text-xs text-gray-600 dark:text-gray-300 select-none cursor-pointer">
+                    Sync Logo & Font between themes
+                  </label>
+                </div>
+                <SettingRow label="Logo URL" settingKey="logoUrl" type="text" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <div className="flex justify-between items-center group/row">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex-1">Connector Style</label>
+                  <select
+                    value={activeTheme.edgeType || 'bezier'}
+                    onChange={(e) => updateActiveTheme('edgeType', e.target.value)}
+                    className="w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"
+                  >
+                    <option value="bezier">Bezier Curve</option>
+                    <option value="smoothstep">Smooth Step</option>
+                    <option value="step">Circuit Step</option>
+                    <option value="straight">Straight Line</option>
+                  </select>
+                </div>
+                <SettingRow label="Google Font" settingKey="fontFamily" type="text" list="fonts" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <datalist id="fonts">
+                  {popularFonts.map(f => <option key={f} value={f} />)}
+                </datalist>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <div className="flex justify-between items-center group/row">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Title</label>
+                  <input type="text" value={flowTitle} onChange={(e) => setFlowTitle(e.target.value)} placeholder="Untitled Flow" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
+                </div>
+                <div className="flex justify-between items-center group/row">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Author</label>
+                  <input type="text" value={flowAuthor} onChange={(e) => setFlowAuthor(e.target.value)} placeholder="Anonymous" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <SettingRow label="Canvas Bg" settingKey="canvasBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Text Box Bg" settingKey="textBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Text Color" settingKey="textColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Path Default" settingKey="pathColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Path Glow" settingKey="pathHighlightColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <SettingRow label="Decision Node" settingKey="decisionColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Note Node" settingKey="noteColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Outcome (Good)" settingKey="outcomeGoodColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Outcome (Neutral)" settingKey="outcomeNeutralColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+                <SettingRow label="Outcome (Bad)" settingKey="outcomeBadColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-700 mt-1">
+                <button
+                  onClick={resetAllSettings}
+                  className="w-full py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded border border-red-200 dark:border-red-800 transition"
+                >
+                  Reset All Settings to Defaults
+                </button>
+              </div>
+                </div>
+              </div>
+            ) : (
+              <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-64 max-h-[80vh] overflow-y-auto mt-2" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
                 <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100">Visual Settings ({isDarkMode ? 'Dark' : 'Light'})</h3>
                 <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
@@ -1494,85 +2011,9 @@ function FlowEditor() {
                   Reset All Settings to Defaults
                 </button>
               </div>
-              </div>
-            </div>
-          ) : (
-            <Panel position="top-right" className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col gap-3 w-64 max-h-[80vh] overflow-y-auto mt-2" style={{ top: 'auto', bottom: 'auto', left: 'auto', right: '14rem' }}>
-              <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
-                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100">Visual Settings ({isDarkMode ? 'Dark' : 'Light'})</h3>
-                <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"><XIcon size={16} /></button>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100 dark:border-gray-700">
-                  <input
-                    type="checkbox"
-                    id="syncSettings"
-                    checked={syncSharedSettings}
-                    onChange={(e) => setSyncSharedSettings(e.target.checked)}
-                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <label htmlFor="syncSettings" className="text-xs text-gray-600 dark:text-gray-300 select-none cursor-pointer">
-                    Sync Logo & Font between themes
-                  </label>
-                </div>
-                <SettingRow label="Logo URL" settingKey="logoUrl" type="text" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-                <div className="flex justify-between items-center group/row">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex-1">Connector Style</label>
-                  <select
-                    value={activeTheme.edgeType || 'bezier'}
-                    onChange={(e) => updateActiveTheme('edgeType', e.target.value)}
-                    className="w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"
-                  >
-                    <option value="bezier">Bezier Curve</option>
-                    <option value="smoothstep">Smooth Step</option>
-                    <option value="step">Circuit Step</option>
-                    <option value="straight">Straight Line</option>
-                  </select>
-                </div>
-                <SettingRow label="Google Font" settingKey="fontFamily" type="text" list="fonts" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-                <datalist id="fonts">
-                  {popularFonts.map(f => <option key={f} value={f} />)}
-                </datalist>
-              </div>
-
-              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                <div className="flex justify-between items-center group/row">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Title</label>
-                  <input type="text" value={flowTitle} onChange={(e) => setFlowTitle(e.target.value)} placeholder="Untitled Flow" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
-                </div>
-                <div className="flex justify-between items-center group/row">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-16">Author</label>
-                  <input type="text" value={flowAuthor} onChange={(e) => setFlowAuthor(e.target.value)} placeholder="Anonymous" className="w-40 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100" />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                <SettingRow label="Canvas Bg" settingKey="canvasBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-                <SettingRow label="Text Box Bg" settingKey="textBg" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-                <SettingRow label="Text Color" settingKey="textColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-                <SettingRow label="Path Default" settingKey="pathColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-                <SettingRow label="Path Glow" settingKey="pathHighlightColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-              </div>
-
-              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                <SettingRow label="Decision Node" settingKey="decisionColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-                <SettingRow label="Note Node" settingKey="noteColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-                <SettingRow label="Outcome (Good)" settingKey="outcomeGoodColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-                <SettingRow label="Outcome (Neutral)" settingKey="outcomeNeutralColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-                <SettingRow label="Outcome (Bad)" settingKey="outcomeBadColor" activeTheme={activeTheme} activeDefaultTheme={activeDefaultTheme} updateActiveTheme={updateActiveTheme} resetSetting={resetSetting} />
-              </div>
-
-              <div className="pt-2 border-t border-gray-100 dark:border-gray-700 mt-1">
-                <button
-                  onClick={resetAllSettings}
-                  className="w-full py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded border border-red-200 dark:border-red-800 transition"
-                >
-                  Reset All Settings to Defaults
-                </button>
-              </div>
-            </Panel>
-          )
-        )}
+              </Panel>
+            )
+          )}
 
         </ReactFlow>
 
@@ -1683,6 +2124,7 @@ function FlowEditor() {
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('outcome', menu.x, menu.y, menu.connectionParams)}>Outcome Node</button>
                 <div className="h-px bg-gray-200 dark:bg-gray-700 my-1 mx-2"></div>
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('image', menu.x, menu.y, menu.connectionParams)}>Decorative Image</button>
+                <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('group', menu.x, menu.y, menu.connectionParams)}>Group Box</button>
                 {highlightedTargetId && (
                    <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => { setHighlightedTargetId(null); setMenu(prev => ({...prev, show: false})); }}>
                      <Waypoints size={14} /> Hide Path
