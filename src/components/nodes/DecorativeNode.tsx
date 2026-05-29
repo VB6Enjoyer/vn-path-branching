@@ -1,25 +1,15 @@
 import React, { useState } from 'react';
-import { NodeProps, NodeResizer, useReactFlow } from '@xyflow/react';
+import { NodeProps, NodeResizer } from '@xyflow/react';
 import { Trash2, Image as ImageIcon, Check, X } from 'lucide-react';
 
 export function DecorativeNode({ data, id, selected }: NodeProps) {
   const mediaUrl = (data.mediaUrl as string) || '';
   const [showInput, setShowInput] = useState<boolean>(!data.mediaUrl);
   const [tempUrl, setTempUrl] = useState<string>((data.mediaUrl as string) || '');
-  const { setNodes } = useReactFlow();
+
 
   const updateNodeData = (newUrl: string) => {
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === id) {
-          return {
-            ...node,
-            data: { ...node.data, mediaUrl: newUrl },
-          };
-        }
-        return node;
-      })
-    );
+    window.dispatchEvent(new CustomEvent('update-node-data', { detail: { id, updates: { mediaUrl: newUrl }, immediateSnapshot: true } }));
   };
 
   const handleSaveUrl = () => {
@@ -29,8 +19,16 @@ export function DecorativeNode({ data, id, selected }: NodeProps) {
     }
   };
 
-  const handleDelete = () => {
-    setNodes((nds) => nds.filter((node) => node.id !== id));
+  const handleDelete = (e: React.MouseEvent) => {
+    if (mediaUrl && !e.shiftKey) {
+      if (!window.confirm("Are you sure you want to delete this decorative image?")) {
+        return;
+      }
+    }
+    // Dispatch a delete event to ensure history captures it (matching recent group node updates, if applicable,
+    // or simply doing what was there before. Wait, `DecorativeNode` used setNodes which bypassed history log!
+    // We should use `delete-node` custom event here too!
+    window.dispatchEvent(new CustomEvent('delete-node', { detail: { id } }));
   };
 
   const isBlurred = !!data.isBlurred;

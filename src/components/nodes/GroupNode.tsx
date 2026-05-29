@@ -51,8 +51,8 @@ export function GroupNode({ id, data, selected }: NodeProps) {
     );
   };
 
-  const handleDelete = () => {
-    if (window.confirm("Are you sure you want to delete this Group Box? (Nodes inside it will remain)")) {
+  const handleDelete = (e: React.MouseEvent) => {
+    if (e.shiftKey || window.confirm("Are you sure you want to delete this Group Box? (Nodes inside it will remain)")) {
       window.dispatchEvent(new CustomEvent('delete-node', { detail: { id } }));
     }
   };
