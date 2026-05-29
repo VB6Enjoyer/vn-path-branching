@@ -168,11 +168,15 @@ function FlowEditor() {
   const [isMenuCollapsed, setIsMenuCollapsed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280);
+  const [windowHeight, setWindowHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setIsMounted(true); }, []);
   useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+      setWindowHeight(window.innerHeight);
+    };
     window.addEventListener('resize', handleResize);
 
     // Initial responsive setup
@@ -181,7 +185,7 @@ function FlowEditor() {
       setIsMenuCollapsed(true);
     }
     if (window.innerWidth < 640) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setIsLocked(true);
     }
 
@@ -189,6 +193,7 @@ function FlowEditor() {
   }, []);
 
   const isMobile = isMounted && windowWidth < 640;
+  const isShort = isMounted && windowHeight < 750;
 
 
   const activeTheme = isDarkMode ? darkTheme : lightTheme;
@@ -350,8 +355,8 @@ function FlowEditor() {
         else undo();
       }
 
-      // Ctrl+S : Save / Export
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      // Ctrl+S : Save / Export (Exclude Shift to allow Firefox screenshots)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         onExport();
       }
@@ -519,10 +524,40 @@ function FlowEditor() {
 
   const deleteNode = useCallback((nodeId: string) => {
     triggerSnapshot(true);
-    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId).map(node => {
+      if (node.parentId === nodeId) {
+        return { ...node, parentId: undefined };
+      }
+      return node;
+    }));
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
     if (highlightedTargetId === nodeId) setHighlightedTargetId(null);
   }, [setNodes, setEdges, triggerSnapshot, highlightedTargetId]);
+
+  useEffect(() => {
+    const handleUpdateNodeData = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { id, updates, immediateSnapshot } = customEvent.detail;
+      if (id && updates) {
+        updateNodeData(id, updates, immediateSnapshot);
+      }
+    };
+
+    const handleDeleteNode = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { id } = customEvent.detail;
+      if (id) {
+        deleteNode(id);
+      }
+    };
+
+    window.addEventListener('update-node-data', handleUpdateNodeData);
+    window.addEventListener('delete-node', handleDeleteNode);
+    return () => {
+      window.removeEventListener('update-node-data', handleUpdateNodeData);
+      window.removeEventListener('delete-node', handleDeleteNode);
+    };
+  }, [updateNodeData, deleteNode]);
 
   const { highlightedNodeIds, highlightedEdgeIds } = useMemo(() => {
     const nodeSet = new Set<string>();
@@ -1143,7 +1178,7 @@ function FlowEditor() {
              </Panel>
           )}
 
-          <Panel position="top-right" className="bg-white dark:bg-gray-800 p-2 sm:p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 flex flex-col gap-2 w-auto sm:w-48 transition-colors pointer-events-auto">
+          <Panel position="top-right" className="bg-white dark:bg-gray-800 p-2 sm:p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 flex flex-col gap-2 max-w-[200px] w-auto sm:max-w-none sm:w-48 transition-colors pointer-events-auto">
             <div className="flex justify-center items-center w-full">
               <div className="grid grid-cols-3 gap-1 sm:gap-2 items-center justify-items-center">
                 <button
@@ -1208,18 +1243,20 @@ function FlowEditor() {
               {!isMobile && (
                 <>
                   <h3 className="font-bold text-sm text-gray-700 dark:text-gray-200 border-b border-gray-100 dark:border-gray-700 pb-1 mt-1">Add Nodes</h3>
-                  <button onClick={() => addNode('decision')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded text-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
-                    <Plus size={18} className="sm:w-[14px] sm:h-[14px]" /> Decision
-                  </button>
-                  <button onClick={() => addNode('text')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800 rounded text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
-                    <FilePlus size={18} className="sm:w-[14px] sm:h-[14px]" /> Note / Event
-                  </button>
-                  <button onClick={() => addNode('outcome')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-sm hover:bg-purple-100 dark:hover:bg-purple-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
-                    <Waypoints size={18} className="sm:w-[14px] sm:h-[14px]" /> Outcome
-                  </button>
-                  <button onClick={() => addNode('group')} disabled={isLocked} className="w-full px-3 py-2 sm:py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0">
-                    <Box size={18} className="sm:w-[14px] sm:h-[14px]" /> Group Box
-                  </button>
+                  <div className={`${isShort ? 'grid grid-cols-2 gap-1' : 'flex flex-col gap-2'}`}>
+                    <button onClick={() => addNode('decision')} disabled={isLocked} title="Decision Node" className={`w-full px-3 py-2 sm:py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded text-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0`}>
+                      <Plus size={18} className="sm:w-[14px] sm:h-[14px]" /> {!isShort && "Decision"}
+                    </button>
+                    <button onClick={() => addNode('text')} disabled={isLocked} title="Note / Event Node" className={`w-full px-3 py-2 sm:py-1.5 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800 rounded text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0`}>
+                      <FilePlus size={18} className="sm:w-[14px] sm:h-[14px]" /> {!isShort && "Note / Event"}
+                    </button>
+                    <button onClick={() => addNode('outcome')} disabled={isLocked} title="Outcome Node" className={`w-full px-3 py-2 sm:py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded text-sm hover:bg-purple-100 dark:hover:bg-purple-900/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0`}>
+                      <Waypoints size={18} className="sm:w-[14px] sm:h-[14px]" /> {!isShort && "Outcome"}
+                    </button>
+                    <button onClick={() => addNode('group')} disabled={isLocked} title="Group Box" className={`w-full px-3 py-2 sm:py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0`}>
+                      <Box size={18} className="sm:w-[14px] sm:h-[14px]" /> {!isShort && "Group Box"}
+                    </button>
+                  </div>
 
                   <hr className="my-1 border-gray-100 dark:border-gray-700" />
 
@@ -1890,8 +1927,7 @@ function FlowEditor() {
                     className="w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"
                   >
                     <option value="bezier">Bezier Curve</option>
-                    <option value="smoothstep">Smooth Step</option>
-                    <option value="step">Circuit Step</option>
+                                        <option value="step">Circuit Step</option>
                     <option value="straight">Straight Line</option>
                   </select>
                 </div>
@@ -1966,8 +2002,7 @@ function FlowEditor() {
                     className="w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"
                   >
                     <option value="bezier">Bezier Curve</option>
-                    <option value="smoothstep">Smooth Step</option>
-                    <option value="step">Circuit Step</option>
+                                        <option value="step">Circuit Step</option>
                     <option value="straight">Straight Line</option>
                   </select>
                 </div>
@@ -2122,9 +2157,13 @@ function FlowEditor() {
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('decision', menu.x, menu.y, menu.connectionParams)}>Decision Node</button>
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('text', menu.x, menu.y, menu.connectionParams)}>Note / Event Node</button>
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('outcome', menu.x, menu.y, menu.connectionParams)}>Outcome Node</button>
-                <div className="h-px bg-gray-200 dark:bg-gray-700 my-1 mx-2"></div>
-                <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('image', menu.x, menu.y, menu.connectionParams)}>Decorative Image</button>
-                <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('group', menu.x, menu.y, menu.connectionParams)}>Group Box</button>
+                {!menu.connectionParams && (
+                  <>
+                    <div className="h-px bg-gray-200 dark:bg-gray-700 my-1 mx-2"></div>
+                    <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('image', menu.x, menu.y, menu.connectionParams)}>Decorative Image</button>
+                    <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('group', menu.x, menu.y, menu.connectionParams)}>Group Box</button>
+                  </>
+                )}
                 {highlightedTargetId && (
                    <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => { setHighlightedTargetId(null); setMenu(prev => ({...prev, show: false})); }}>
                      <Waypoints size={14} /> Hide Path
@@ -2146,14 +2185,16 @@ function FlowEditor() {
                   </button>
                 )}
 
-                {highlightedTargetId === menu.targetNode?.id ? (
-                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('clear_highlight')}>
-                    <Waypoints size={14} /> Hide Path
-                  </button>
-                ) : (
-                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('highlight_path')}>
-                    <Waypoints size={14} /> Show Path to Node
-                  </button>
+                {menu.targetNode?.type !== 'image' && menu.targetNode?.type !== 'group' && (
+                  highlightedTargetId === menu.targetNode?.id ? (
+                    <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('clear_highlight')}>
+                      <Waypoints size={14} /> Hide Path
+                    </button>
+                  ) : (
+                    <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('highlight_path')}>
+                      <Waypoints size={14} /> Show Path to Node
+                    </button>
+                  )
                 )}
 
                 {!isLocked && (

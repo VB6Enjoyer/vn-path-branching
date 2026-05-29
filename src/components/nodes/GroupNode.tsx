@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NodeProps, NodeResizer, useReactFlow } from '@xyflow/react';
 import { Trash2, Settings2, Check, X, Lock, Unlock } from 'lucide-react';
 
@@ -15,20 +15,21 @@ export function GroupNode({ id, data, selected }: NodeProps) {
   // Derive lock state directly from node data
   const isGroupLocked = !!data.isPositionLocked;
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLabel((data.label as string) || 'Group / Chapter');
+
+    setBgColor((data.bgColor as string) || '#808080');
+
+    setBgOpacity((data.bgOpacity as number) ?? 20);
+
+    setBorderColor((data.borderColor as string) || '#808080');
+  }, [data.label, data.bgColor, data.bgOpacity, data.borderColor]);
+
   const { setNodes } = useReactFlow();
 
   const updateNodeData = (updates: Record<string, unknown>) => {
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === id) {
-          return {
-            ...node,
-            data: { ...node.data, ...updates },
-          };
-        }
-        return node;
-      })
-    );
+    window.dispatchEvent(new CustomEvent('update-node-data', { detail: { id, updates, immediateSnapshot: true } }));
   };
 
   const handleSaveSettings = () => {
@@ -38,32 +39,22 @@ export function GroupNode({ id, data, selected }: NodeProps) {
 
   const toggleLock = () => {
     const newLockState = !isGroupLocked;
+    window.dispatchEvent(new CustomEvent('update-node-data', { detail: { id, updates: { isPositionLocked: newLockState }, immediateSnapshot: true } }));
 
-    // We update the data property to persist the lock
-    // And we update the root level draggable property so ReactFlow enforces it
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === id) {
-          return {
-            ...node,
-            draggable: !newLockState,
-            data: { ...node.data, isPositionLocked: newLockState },
-          };
+          return { ...node, draggable: !newLockState };
         }
         return node;
       })
     );
   };
 
-  const handleDelete = () => {
-    // Delete the group (children stay, they just lose their parent)
-    setNodes((nds) => nds.filter((node) => node.id !== id).map(node => {
-      if (node.parentId === id) {
-        // Convert to absolute position roughly
-        return { ...node, parentId: undefined };
-      }
-      return node;
-    }));
+  const handleDelete = (e: React.MouseEvent) => {
+    if (e.shiftKey || window.confirm("Are you sure you want to delete this Group Box? (Nodes inside it will remain)")) {
+      window.dispatchEvent(new CustomEvent('delete-node', { detail: { id } }));
+    }
   };
 
   // Convert hex + opacity to rgba string

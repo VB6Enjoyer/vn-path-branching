@@ -36,9 +36,7 @@ export function CustomEdge({
   };
 
   let edgePath, labelX, labelY;
-  if (edgeType === 'smoothstep') {
-    [edgePath, labelX, labelY] = getSmoothStepPath(pathParams);
-  } else if (edgeType === 'step') {
+  if (edgeType === 'step') {
     [edgePath, labelX, labelY] = getSmoothStepPath({ ...pathParams, borderRadius: 0 });
   } else if (edgeType === 'straight') {
     [edgePath, labelX, labelY] = getStraightPath(pathParams);
