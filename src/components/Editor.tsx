@@ -587,7 +587,7 @@ function FlowEditor() {
   const nodesWithCallbacks = useMemo(() => {
     return nodes.map(node => {
       const isHighlighted = highlightedNodeIds.has(node.id);
-      const isBlurred = isSpoilerMode && node.id !== 'start' && node.type !== 'image' && !revealedNodeIds.has(node.id);
+      const isBlurred = isSpoilerMode && node.id !== 'start' && node.type !== 'image' && node.type !== 'group' && !revealedNodeIds.has(node.id);
       const data: Record<string, unknown> = { ...node.data, onDelete: deleteNode, isHighlighted, isBlurred, isLocked };
 
       if (node.type === 'decision') {
@@ -1160,7 +1160,9 @@ function FlowEditor() {
           <Controls className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" />
           <MiniMap className="hidden sm:block"
             nodeColor={getMiniMapNodeColor}
+            nodeStrokeColor={(n) => n.type === 'image' ? 'transparent' : (n.type === 'group' ? 'transparent' : (isDarkMode ? '#374151' : '#cbd5e1'))}
             nodeBorderRadius={4}
+            nodeClassName={(n) => n.type === 'image' ? 'opacity-0' : (n.type === 'group' ? 'opacity-50' : '')}
             maskColor={isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)'}
             style={{ backgroundColor: isDarkMode ? '#1f2937' : '#ffffff' }}
           />
