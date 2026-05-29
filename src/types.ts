@@ -11,7 +11,7 @@ export interface ThemeSettings {
   pathHighlightColor: string;
   pathColor: string;
   logoUrl: string;
-  edgeType?: 'bezier' | 'smoothstep' | 'step' | 'straight';
+  edgeType?: 'bezier' | 'step' | 'straight';
 }
 
 export const defaultLightTheme: ThemeSettings = {

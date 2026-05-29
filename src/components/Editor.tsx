@@ -181,7 +181,7 @@ function FlowEditor() {
       setIsMenuCollapsed(true);
     }
     if (window.innerWidth < 640) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setIsLocked(true);
     }
 
@@ -519,10 +519,40 @@ function FlowEditor() {
 
   const deleteNode = useCallback((nodeId: string) => {
     triggerSnapshot(true);
-    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId).map(node => {
+      if (node.parentId === nodeId) {
+        return { ...node, parentId: undefined };
+      }
+      return node;
+    }));
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
     if (highlightedTargetId === nodeId) setHighlightedTargetId(null);
   }, [setNodes, setEdges, triggerSnapshot, highlightedTargetId]);
+
+  useEffect(() => {
+    const handleUpdateNodeData = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { id, updates, immediateSnapshot } = customEvent.detail;
+      if (id && updates) {
+        updateNodeData(id, updates, immediateSnapshot);
+      }
+    };
+
+    const handleDeleteNode = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { id } = customEvent.detail;
+      if (id) {
+        deleteNode(id);
+      }
+    };
+
+    window.addEventListener('update-node-data', handleUpdateNodeData);
+    window.addEventListener('delete-node', handleDeleteNode);
+    return () => {
+      window.removeEventListener('update-node-data', handleUpdateNodeData);
+      window.removeEventListener('delete-node', handleDeleteNode);
+    };
+  }, [updateNodeData, deleteNode]);
 
   const { highlightedNodeIds, highlightedEdgeIds } = useMemo(() => {
     const nodeSet = new Set<string>();
@@ -1890,8 +1920,7 @@ function FlowEditor() {
                     className="w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"
                   >
                     <option value="bezier">Bezier Curve</option>
-                    <option value="smoothstep">Smooth Step</option>
-                    <option value="step">Circuit Step</option>
+                                        <option value="step">Circuit Step</option>
                     <option value="straight">Straight Line</option>
                   </select>
                 </div>
@@ -1966,8 +1995,7 @@ function FlowEditor() {
                     className="w-28 text-xs p-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100"
                   >
                     <option value="bezier">Bezier Curve</option>
-                    <option value="smoothstep">Smooth Step</option>
-                    <option value="step">Circuit Step</option>
+                                        <option value="step">Circuit Step</option>
                     <option value="straight">Straight Line</option>
                   </select>
                 </div>
@@ -2122,9 +2150,13 @@ function FlowEditor() {
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('decision', menu.x, menu.y, menu.connectionParams)}>Decision Node</button>
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('text', menu.x, menu.y, menu.connectionParams)}>Note / Event Node</button>
                 <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('outcome', menu.x, menu.y, menu.connectionParams)}>Outcome Node</button>
-                <div className="h-px bg-gray-200 dark:bg-gray-700 my-1 mx-2"></div>
-                <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('image', menu.x, menu.y, menu.connectionParams)}>Decorative Image</button>
-                <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('group', menu.x, menu.y, menu.connectionParams)}>Group Box</button>
+                {!menu.connectionParams && (
+                  <>
+                    <div className="h-px bg-gray-200 dark:bg-gray-700 my-1 mx-2"></div>
+                    <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('image', menu.x, menu.y, menu.connectionParams)}>Decorative Image</button>
+                    <button className="px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200" onClick={() => addNode('group', menu.x, menu.y, menu.connectionParams)}>Group Box</button>
+                  </>
+                )}
                 {highlightedTargetId && (
                    <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-2" onClick={() => { setHighlightedTargetId(null); setMenu(prev => ({...prev, show: false})); }}>
                      <Waypoints size={14} /> Hide Path
@@ -2146,14 +2178,16 @@ function FlowEditor() {
                   </button>
                 )}
 
-                {highlightedTargetId === menu.targetNode?.id ? (
-                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('clear_highlight')}>
-                    <Waypoints size={14} /> Hide Path
-                  </button>
-                ) : (
-                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('highlight_path')}>
-                    <Waypoints size={14} /> Show Path to Node
-                  </button>
+                {menu.targetNode?.type !== 'image' && menu.targetNode?.type !== 'group' && (
+                  highlightedTargetId === menu.targetNode?.id ? (
+                    <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('clear_highlight')}>
+                      <Waypoints size={14} /> Hide Path
+                    </button>
+                  ) : (
+                    <button className="flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-600 dark:text-cyan-400" onClick={() => handleMenuNodeAction('highlight_path')}>
+                      <Waypoints size={14} /> Show Path to Node
+                    </button>
+                  )
                 )}
 
                 {!isLocked && (
