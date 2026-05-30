@@ -19,9 +19,20 @@ import {
   getViewportForBounds
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { v4 as uuidv4 } from 'uuid';
+
 import { Download, Upload, LocateFixed, Moon, Sun, Settings, X as XIcon, RotateCcw, Undo2, Redo2, FilePlus, Plus, EyeOff, Trash2, Waypoints, EyeClosed, List, FolderOpen, Calendar, User, FileText, Lock, Unlock, ChevronUp, ChevronDown, ShieldAlert, ImageDown, Check, Box, Search } from 'lucide-react';
-import debounce from 'lodash.debounce';
+// Simple debounce utility
+function debounce<T extends (...args: unknown[]) => void>(func: T, wait: number): T & { cancel: () => void } {
+  let timeout: NodeJS.Timeout | null = null;
+  const debounced = (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+  debounced.cancel = () => {
+    if (timeout) clearTimeout(timeout);
+  };
+  return debounced as T & { cancel: () => void };
+}
 import { toPng, toSvg } from 'html-to-image';
 
 import { DecisionNode, TextNode, OutcomeNode, CustomEdge, DecorativeNode, GroupNode } from './nodes';
@@ -371,7 +382,7 @@ function FlowEditor() {
 
         triggerSnapshot(true);
         const duplicatedNodes = selectedNodes.map(node => {
-          const newId = uuidv4();
+          const newId = crypto.randomUUID();
           return {
             ...node,
             id: newId,
@@ -735,7 +746,7 @@ function FlowEditor() {
         });
       }
     },
-    [isLocked]
+    []
   );
 
   const onPaneClick = useCallback(() => {
@@ -766,7 +777,7 @@ function FlowEditor() {
        position = screenToFlowPosition({ x: menuX + left, y: menuY + top });
     }
 
-    const id = uuidv4();
+    const id = crypto.randomUUID();
     let data = {};
     let style = undefined;
     if (type === 'decision') data = { prompt: 'New Decision', choices: ['Choice A', 'Choice B'] };
